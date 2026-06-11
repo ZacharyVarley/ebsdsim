@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MasterPattern.lambert_data(normalize=...)` reshapes embedded point-group operators
   correctly (flat PG tables from `pg_ops` are now accepted).
 - Standalone `mploader` remains NumPy-only (scaling helpers are duplicated inline).
+- Release workflow and setuptools version discovery: lazy `ebsdsim` package `__init__` so
+  reading `__version__` does not import NumPy/wgpu before dependencies are installed.
 
 ## [0.1.2] - 2026-06-11
 

@@ -22,7 +22,8 @@ jobs:
 
       - name: Verify tag matches ebsdsim._version
         run: |
-          VERSION=$(python -c "from ebsdsim._version import __version__; print(__version__)")
+          VERSION=$(python -c "import ast; from pathlib import Path; tree=ast.parse(Path('ebsdsim/_version.py').read_text());
+          print(next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if getattr(t,'id',None)=='__version__'))")
           TAG="${GITHUB_REF#refs/tags/v}"
           if [ "$TAG" != "$VERSION" ]; then
             echo "Tag v$TAG does not match ebsdsim._version $VERSION"
