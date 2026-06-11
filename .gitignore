@@ -12,6 +12,7 @@ build/
 /ebsdsimgui/
 /ebsdsim-web/
 /output/
+/scratch/
 
 # Editor / OS
 .DS_Store

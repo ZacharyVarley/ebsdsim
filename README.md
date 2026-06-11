@@ -252,6 +252,37 @@ python -m build               # sdist + wheel (requires `build` extra)
 CI runs CPU tests on Ubuntu (Python 3.11–3.12) and full GPU tests on macOS
 (Metal). See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
+### Releasing (automated PyPI)
+
+Releases are published by pushing a version tag. The
+[`.github/workflows/release.yml`](.github/workflows/release.yml) workflow builds the
+sdist/wheel, uploads them to the GitHub release, and publishes to PyPI via **trusted
+publishing** (no API token in the repo).
+
+**One-time setup**
+
+1. On [PyPI](https://pypi.org/manage/account/publishing/): add a **pending publisher**
+   - PyPI project name: `ebsdsim`
+   - Owner: `ZacharyVarley`, repository: `ebsdsim`
+   - Workflow: `release.yml`, environment: `pypi`
+2. On GitHub: repo **Settings → Environments** → create environment `pypi` (no secrets
+   required for trusted publishing).
+
+**Each release**
+
+1. Set `version` in `pyproject.toml` and move notes in `CHANGELOG.md` out of
+   **Unreleased**.
+2. Commit and push to `main`.
+3. Tag and push (tag must match `pyproject.toml`, without the `v` prefix):
+
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+4. Watch the **Release** workflow; the package appears on
+   [pypi.org/project/ebsdsim](https://pypi.org/project/ebsdsim/) when it finishes.
+
 ---
 
 ## Contributing
