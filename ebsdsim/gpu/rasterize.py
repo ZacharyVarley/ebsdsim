@@ -12,7 +12,9 @@ from wgpu import BufferUsage
 from ebsdsim.gpu.buffers import StorageBuffer, f32_bytes, u32_bytes
 from ebsdsim.gpu.pipelines import PipelineCache, load_wgsl, workgroups_1d
 from ebsdsim.kgrid import PgKGrid
-from ebsdsim.rasterize import _robust_normalize, build_rasterize_pixel_maps
+from ebsdsim.normalize import NormalizeMode, scale_fs_channel
+from ebsdsim.rasterize import build_rasterize_pixel_maps
+from ebsdsim.weights import reduce_over_sites
 
 
 LAMBERT_FILL_WORKGROUP_SIZE = 64
@@ -39,11 +41,12 @@ def _build_per_direction_views(
     values_fs: NDArray[np.floating],
     n_k: int,
     n_sites: int,
+    site_weights: NDArray[np.floating] | None = None,
 ) -> list[NDArray[np.float32]]:
-    """Site-mean view first, then per-site views (matches ``build_master_pattern_data``)."""
+    """Site-marginal view first, then per-site views (matches ``build_master_pattern_data``)."""
     arr = np.asarray(values_fs, dtype=np.float32).reshape(n_k, n_sites)
     if n_sites > 1:
-        views = [arr.mean(axis=1, dtype=np.float32)]
+        views = [reduce_over_sites(arr, site_weights)]
         for s in range(n_sites):
             views.append(arr[:, s].astype(np.float32, copy=False))
         return views
@@ -56,8 +59,9 @@ def _scatter_views_to_sheet_stack(
     hw: int,
     side: int,
     *,
-    normalize: bool,
-    robust: bool,
+    normalize: NormalizeMode | None,
+    robust_p_low: float,
+    robust_p_high: float,
 ) -> NDArray[np.float32]:
     plane = side * side
     kij = np.asarray(kij).reshape(-1, 3)
@@ -68,7 +72,9 @@ def _scatter_views_to_sheet_stack(
     north = sign > 0
     stacked = np.zeros(len(views) * 2 * plane, dtype=np.float32)
     for v, per_dir in enumerate(views):
-        vals = _robust_normalize(per_dir, robust) if normalize else per_dir.astype(np.float32, copy=False)
+        vals = scale_fs_channel(
+            per_dir, normalize, robust_p_low=robust_p_low, robust_p_high=robust_p_high
+        )
         sheet_nh = np.zeros(plane, dtype=np.float32)
         sheet_sh = np.zeros(plane, dtype=np.float32)
         sheet_nh[dst[north]] = vals[north]
@@ -87,19 +93,27 @@ def _reshape_lambert_stack(
     e_dim: int,
     s_dim: int,
     h_dim: int,
+    normalize: NormalizeMode | None,
 ) -> NDArray[np.float32]:
     plane = side * side
     view_stride = plane * 2
+
+    def _plane(slice_: NDArray[np.float32]) -> NDArray[np.float32]:
+        arr = slice_.reshape(side, side)
+        if normalize is not None:
+            return np.clip(arr, 0.0, 1.0)
+        return arr
+
     data = np.empty((e_dim, s_dim, h_dim, side, side), dtype=np.float32)
     for c in range(view_count):
         base = c * view_stride
-        nh = np.clip(stack[base : base + plane], 0.0, 1.0).reshape(side, side)
+        nh = _plane(stack[base : base + plane])
         if h_dim == 1:
             e_idx = c // s_dim
             s_idx = c % s_dim
             data[e_idx, s_idx, 0] = nh
         else:
-            sh = np.clip(stack[base + plane : base + view_stride], 0.0, 1.0).reshape(side, side)
+            sh = _plane(stack[base + plane : base + view_stride])
             e_idx = c // s_dim
             s_idx = c % s_dim
             data[e_idx, s_idx, 0] = nh
@@ -261,14 +275,22 @@ class GpuLambertRasterizer:
         kij: NDArray[np.integer],
         hw: int,
         *,
-        normalize: bool = True,
-        robust: bool = True,
+        normalize: NormalizeMode | None = None,
+        robust_p_low: float = 0.01,
+        robust_p_high: float = 0.99,
+        site_weights: NDArray[np.floating] | None = None,
         readback: bool = True,
     ) -> NDArray[np.float32]:
         """GPU Lambert fill for integrated FS values (per-bin preview parity with web)."""
-        views = _build_per_direction_views(values_fs, n_k, n_sites)
+        views = _build_per_direction_views(values_fs, n_k, n_sites, site_weights)
         stack = _scatter_views_to_sheet_stack(
-            views, kij, hw, self.side, normalize=normalize, robust=robust
+            views,
+            kij,
+            hw,
+            self.side,
+            normalize=normalize,
+            robust_p_low=robust_p_low,
+            robust_p_high=robust_p_high,
         )
         return self.expand_sheets(stack, len(views), readback=readback)
 
@@ -294,8 +316,10 @@ def build_master_pattern_data_gpu(
     hw: int,
     side: int,
     needs_southern_hemisphere: bool,
-    normalize: bool = True,
-    robust: bool = True,
+    normalize: NormalizeMode | None = None,
+    robust_p_low: float = 0.01,
+    robust_p_high: float = 0.99,
+    site_weights: NDArray[np.floating] | None = None,
 ) -> tuple[NDArray[np.float32], dict[str, Any]]:
     """Expand FS intensities on GPU into ``(E, S, H, side, side)`` (CPU sheet scatter)."""
     integrated_fs = np.asarray(integrated_fs, dtype=np.float32)
@@ -321,10 +345,16 @@ def build_master_pattern_data_gpu(
 
     all_views: list[NDArray[np.float32]] = []
     for esrc in energy_sources:
-        all_views.extend(_build_per_direction_views(esrc, n_k, n_sites))
+        all_views.extend(_build_per_direction_views(esrc, n_k, n_sites, site_weights))
 
     sheet_stack = _scatter_views_to_sheet_stack(
-        all_views, kij, hw, side, normalize=normalize, robust=robust
+        all_views,
+        kij,
+        hw,
+        side,
+        normalize=normalize,
+        robust_p_low=robust_p_low,
+        robust_p_high=robust_p_high,
     )
     raster_stack = rasterizer.expand_sheets(sheet_stack, len(all_views))
     h_dim = 2 if needs_southern_hemisphere else 1
@@ -335,6 +365,7 @@ def build_master_pattern_data_gpu(
         e_dim=e_dim,
         s_dim=s_dim,
         h_dim=h_dim,
+        normalize=normalize,
     )
     axes = {
         "dims": ["energy", "site", "hemisphere", "height", "width"],

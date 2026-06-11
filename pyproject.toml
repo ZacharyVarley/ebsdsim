@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ebsdsim"
-version = "0.1.2"
+dynamic = ["version"]
 description = "GPU-accelerated dynamical EBSD master-pattern simulation."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,6 +54,9 @@ docs = [
   "jupyter>=1.0",
   "matplotlib>=3.5",
 ]
+
+[tool.setuptools.dynamic]
+version = { attr = "ebsdsim._version.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["ebsdsim*"]

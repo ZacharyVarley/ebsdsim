@@ -76,6 +76,9 @@ def test_save_load_roundtrip_matches_gpu(tmp_path):
     loaded = load_master_pattern(out)
     assert loaded.meta["format"] == "ebsdsim-master-pattern"
     assert loaded.n_sites == 2
+    assert loaded.site_weights is not None
+    assert loaded.site_weights.shape == (2,)
+    assert np.isclose(loaded.site_weights.sum(), 1.0)
     assert loaded.n_bins == len(mp.bin_patterns)
     assert loaded.needs_southern_hemisphere is True
 
@@ -102,3 +105,25 @@ def test_bin_reconstruction_and_png(tmp_path):
 
     with pytest.raises(IndexError):
         loaded.reconstruct_bin(loaded.n_bins)
+
+
+@pytest.mark.slow
+def test_lambert_data_display_scaling(tmp_path):
+    mp = _gan_pattern()
+    out = mp.save(tmp_path / "gan.npz")
+    loaded = load_master_pattern(out)
+    nh_raw = loaded.data[0, 0, 0]
+    disp, _ = loaded.lambert_data(normalize="minmax")
+    nh_scaled = disp[0, 0, 0]
+    assert nh_raw.max() > 1.0 or nh_scaled.max() <= 1.0 + 1e-6
+    assert not np.allclose(nh_raw, nh_scaled)
+    assert np.allclose(loaded.data, load_master_pattern(out).data)
+
+
+@pytest.mark.slow
+def test_master_pattern_lambert_data_method():
+    mp = _gan_pattern(halfw=17)
+    assert np.allclose(mp.data, mp.lambert_data()[0])
+    disp, _ = mp.lambert_data(normalize="minmax")
+    assert not np.allclose(mp.data, disp)
+    assert not np.allclose(mp.pattern, disp[0, 0, 0])

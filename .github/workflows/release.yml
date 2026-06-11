@@ -20,12 +20,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify tag matches pyproject.toml version
+      - name: Verify tag matches ebsdsim._version
         run: |
-          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          VERSION=$(python -c "from ebsdsim._version import __version__; print(__version__)")
           TAG="${GITHUB_REF#refs/tags/v}"
           if [ "$TAG" != "$VERSION" ]; then
-            echo "Tag v$TAG does not match pyproject.toml version $VERSION"
+            echo "Tag v$TAG does not match ebsdsim._version $VERSION"
             exit 1
           fi
 

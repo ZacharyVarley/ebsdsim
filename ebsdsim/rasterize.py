@@ -9,12 +9,15 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ebsdsim.kgrid import PgKGrid, square_to_hemisphere
+from ebsdsim.normalize import NormalizeMode, scale_fs_channel
 from ebsdsim.pg_ops import fs_normals, orbit_fs_representative, pg_num_to_symbol, point_group_operators
 
 
 @dataclass
 class RasterizeOptions:
-    robust_norm: bool = True
+    normalize: NormalizeMode | None = None
+    robust_p_low: float = 0.01
+    robust_p_high: float = 0.99
     interp_mode: Literal["nearest", "bilinear"] = "bilinear"
     fs_only: bool = False
 
@@ -235,41 +238,6 @@ def _sample_sheet_array(
     return out.astype(np.float32, copy=False)
 
 
-def _robust_normalize(vals: NDArray[np.float32], robust: bool) -> NDArray[np.float32]:
-    if vals.size == 0:
-        return vals.copy()
-    out = np.zeros_like(vals)
-    if robust:
-        sorted_vals = np.sort(vals)
-        def q(p: float) -> float:
-            idx = min(sorted_vals.size - 1, max(0, int(np.floor(p * (sorted_vals.size - 1)))))
-            return float(sorted_vals[idx])
-        q1 = q(0.25)
-        q3 = q(0.75)
-        iqr = q3 - q1
-        if iqr > 0:
-            lo_bound = q1 - 3 * iqr
-            hi_bound = q3 + 3 * iqr
-            good = sorted_vals[(sorted_vals >= lo_bound) & (sorted_vals <= hi_bound)]
-            if good.size > 0:
-                lo = float(good[int(np.floor(0.01 * (good.size - 1)))])
-                hi = float(good[int(np.floor(0.99 * (good.size - 1)))])
-            else:
-                lo = float(sorted_vals[0])
-                hi = float(sorted_vals[-1])
-        else:
-            lo = float(sorted_vals[0])
-            hi = float(sorted_vals[-1])
-    else:
-        lo = float(np.min(vals))
-        hi = float(np.max(vals))
-    span = hi - lo
-    if span <= 1e-15:
-        return out
-    out[:] = np.clip((vals - lo) / span, 0.0, 1.0)
-    return out
-
-
 def rasterize_pattern(
     pattern: NDArray[np.floating] | list[float],
     grid: PgKGrid,
@@ -285,7 +253,12 @@ def rasterize_pattern(
             per_dir[r] = float(np.mean(arr[r * n_sites : (r + 1) * n_sites]))
     else:
         per_dir = arr if arr.ndim == 1 else arr.astype(np.float32)
-    vals_f = _robust_normalize(per_dir, options.robust_norm)
+    vals_f = scale_fs_channel(
+        per_dir,
+        options.normalize,
+        robust_p_low=options.robust_p_low,
+        robust_p_high=options.robust_p_high,
+    )
 
     side = grid.side
     hw = grid.hw
@@ -306,17 +279,22 @@ def rasterize_pattern(
             return RasterizedPattern(nh=sheet_nh, sh=sheet_nh.copy(), side=side)
         return RasterizedPattern(nh=sheet_nh, sh=sheet_sh, side=side)
 
+    def _maybe_clip(arr: NDArray[np.float32]) -> NDArray[np.float32]:
+        if options.normalize is not None:
+            return np.clip(arr, 0.0, 1.0).astype(np.float32, copy=False)
+        return arr.astype(np.float32, copy=False)
+
     nh_map = _build_pixel_source_map(hw, False, grid.pg_num)
     nh_from_nh = _sample_sheet_array(sheet_nh, side, nh_map.src_x, nh_map.src_y, options.interp_mode)
     if grid.is_centro:
-        nh = np.clip(nh_from_nh, 0.0, 1.0)
+        nh = _maybe_clip(nh_from_nh)
         return RasterizedPattern(nh=nh, sh=nh.copy(), side=side)
     nh_from_sh = _sample_sheet_array(sheet_sh, side, nh_map.src_x, nh_map.src_y, options.interp_mode)
-    nh = np.clip(np.where(nh_map.from_sh != 0, nh_from_sh, nh_from_nh), 0.0, 1.0).astype(np.float32)
+    nh = _maybe_clip(np.where(nh_map.from_sh != 0, nh_from_sh, nh_from_nh).astype(np.float32))
     sh_map = _build_pixel_source_map(hw, True, grid.pg_num)
     sh_from_nh = _sample_sheet_array(sheet_nh, side, sh_map.src_x, sh_map.src_y, options.interp_mode)
     sh_from_sh = _sample_sheet_array(sheet_sh, side, sh_map.src_x, sh_map.src_y, options.interp_mode)
-    sh = np.clip(np.where(sh_map.from_sh != 0, sh_from_sh, sh_from_nh), 0.0, 1.0).astype(np.float32)
+    sh = _maybe_clip(np.where(sh_map.from_sh != 0, sh_from_sh, sh_from_nh).astype(np.float32))
     return RasterizedPattern(nh=nh, sh=sh, side=side)
 
 

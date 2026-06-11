@@ -100,7 +100,7 @@ def main() -> None:
         result.integrated,
         pg_grid,
         n_sites=result.n_sites,
-        opts=RasterizeOptions(robust_norm=True, interp_mode="bilinear"),
+        opts=RasterizeOptions(normalize="robust", interp_mode="bilinear"),
     )
     pattern = raster.nh.astype(np.float32).reshape(grid_size, grid_size)
     gray = float01_to_uint8(pattern)

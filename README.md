@@ -197,6 +197,11 @@ patterns:
 | `dmin` | `0.05` nm | Minimum d-spacing — sets the reflection sphere (smaller → more beams, slower) |
 | `halfw` | `250` | Lambert half-width; pattern size is `(1 + 2×halfw) × (1 + 2×halfw)` |
 
+`mp.pattern`, `mp.data`, and `mp.integrated` are always **raw dynamical
+intensities**. For display scaling, call `mp.lambert_data(normalize="minmax")`
+or `mp.lambert_data(normalize="robust", robust_p_low=0.01, robust_p_high=0.99)`.
+Scaling is never baked into the simulation result.
+
 ---
 
 ## Loading a saved pattern (NumPy only)
@@ -208,8 +213,9 @@ into any project that only needs to read `.npz` output.
 from ebsdsim.mploader import load_master_pattern, to_uint8, save_png_gray
 
 mp = load_master_pattern("GaN-master-pattern.npz")
+disp, _ = mp.lambert_data(normalize="minmax")
 
-nh = mp.data[0, 0, 0]   # energy-integrated, site-integrated, north hemisphere
+nh = disp[0, 0, 0]   # energy-integrated, site-integrated, north hemisphere
 save_png_gray(to_uint8(nh), "GaN_integrated_nh.png")
 ```
 
@@ -217,10 +223,11 @@ save_png_gray(to_uint8(nh), "GaN_integrated_nh.png")
 
 | Array | Meaning |
 | --- | --- |
-| `fundamental_sector` | Symmetry-reduced intensities `(E, S, n_k)` |
+| `fundamental_sector` | Raw symmetry-reduced intensities `(E, S, n_k)` |
 | `fundamental_kij`, `fundamental_khat` | Lambert indices and unit directions per FS pixel |
 | `pg_operators`, `fs_normals` | Point-group matrices and sector bounding normals |
 | `bin_voltages_kv`, `bin_weights` | Per-bin beam voltage and energy weight |
+| `site_weights` | Normalized occupancy × multiplicity weights for the site marginal |
 | `meta_json` | UTF-8 JSON simulation metadata (includes beam, MC, and dynamical settings) |
 
 See [`examples/02_save_and_load.ipynb`](examples/02_save_and_load.ipynb) for a full
@@ -270,10 +277,9 @@ publishing** (no API token in the repo).
 
 **Each release**
 
-1. Set `version` in `pyproject.toml` and move notes in `CHANGELOG.md` out of
-   **Unreleased**.
+1. Bump `__version__` in `ebsdsim/_version.py` and add notes to `CHANGELOG.md`.
 2. Commit and push to `main`.
-3. Tag and push (tag must match `pyproject.toml`, without the `v` prefix):
+3. Tag and push (tag must match `ebsdsim._version`, without the `v` prefix):
 
    ```bash
    git tag v0.1.0

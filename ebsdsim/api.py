@@ -24,6 +24,7 @@ from ebsdsim.material import build_cell_from_material
 from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.sgh import prepare_site_sgh_tables
 from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.normalize import NormalizeMode
 from ebsdsim.types import MasterPatternMode
 
 
@@ -82,16 +83,17 @@ class MasterPattern:
     pattern:
         North-hemisphere Lambert raster ``(side, side)`` with
         ``side = 1 + 2 * halfw``. Equal to ``data[energy_int, site_int, 0]``.
+        Always raw dynamical intensities; use :meth:`lambert_data` for display
+        scaling.
     data:
-        Dense Lambert tensor ``(E, S, H, side, side)`` built on
-        construction. ``E`` is ``1 + n_energy_bins`` (index 0 integrated) when
-        there is more than one bin, else ``1``; ``S`` is ``1 + n_sites``
-        (index 0 site-integrated) when there is more than one site, else ``1``;
-        ``H`` is ``2`` when the southern hemisphere is needed, else ``1``.
-        See ``axes`` for the index layout.
+        Dense Lambert tensor ``(E, S, H, side, side)`` of **raw** intensities.
+        ``E`` is ``1 + n_energy_bins`` (index 0 integrated) when there is more
+        than one bin, else ``1``; ``S`` is ``1 + n_sites`` (index 0
+        site-integrated) when there is more than one site, else ``1``; ``H`` is
+        ``2`` when the southern hemisphere is needed, else ``1``. See ``axes``.
     integrated:
-        Energy-integrated fundamental-sector intensities, flattened
-        ``(n_k * n_sites,)`` in row-major ``(direction, site)`` order.
+        Energy-integrated fundamental-sector intensities (raw, un-normalized),
+        flattened ``(n_k * n_sites,)`` in row-major ``(direction, site)`` order.
     bin_patterns:
         Per-energy-bin fundamental-sector intensities (the intermediates),
         each flattened ``(n_k * n_sites,)``. Stored unweighted.
@@ -122,6 +124,47 @@ class MasterPattern:
         from ebsdsim.save import save_master_pattern
 
         return save_master_pattern(self, path)
+
+    def lambert_data(
+        self,
+        *,
+        normalize: NormalizeMode | None = None,
+        robust_p_low: float = 0.01,
+        robust_p_high: float = 0.99,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Expand raw FS intensities to Lambert ``(E, S, H, side, side)``.
+
+        ``normalize`` is ``None`` (raw), ``"minmax"``, or ``"robust"``. Scaling
+        is applied on demand only; :attr:`data` and :attr:`pattern` stay raw.
+        """
+        if normalize is None:
+            return self.data, self.axes
+        if self.kij is None or self.pg_num is None:
+            raise ValueError("MasterPattern is missing fundamental-sector grid data.")
+        from ebsdsim.mploader import build_master_pattern_data
+        from ebsdsim.pg_ops import fs_normals, pg_num_to_symbol, point_group_operators
+        from ebsdsim.save import _stack_bins
+        from ebsdsim.weights import site_weights_from_meta_cell
+
+        n_k, n_sites = int(self.n_k), int(self.n_sites)
+        symbol = pg_num_to_symbol(int(self.pg_num))
+        halfw = int(self.metadata["halfw"])
+        side = int(self.metadata["grid_size"])
+        site_weights = site_weights_from_meta_cell(self.metadata.get("cell", {}))
+        return build_master_pattern_data(
+            integrated_fs=np.asarray(self.integrated, dtype=np.float32).reshape(n_k, n_sites),
+            bin_fs=_stack_bins(list(self.bin_patterns), n_k, n_sites),
+            kij=self.kij,
+            pg_operators=point_group_operators(symbol).reshape(-1, 3, 3),
+            fs_normals=fs_normals(symbol).reshape(-1, 3),
+            hw=halfw,
+            side=side,
+            needs_southern_hemisphere=bool(self.metadata.get("needs_southern_hemisphere", False)),
+            site_weights=site_weights,
+            normalize=normalize,
+            robust_p_low=robust_p_low,
+            robust_p_high=robust_p_high,
+        )
 
 
 def _validate_halfw(halfw: int) -> int:
@@ -352,7 +395,9 @@ def _run_master_pattern(
     )
 
     from ebsdsim.gpu.rasterize import GpuLambertRasterizer, build_master_pattern_data_gpu
+    from ebsdsim.weights import site_weights_from_cell
 
+    site_weights = site_weights_from_cell(cell)
     kij = pg_grid.kij.reshape(-1, 3).astype(np.int32, copy=False)
     rasterizer = GpuLambertRasterizer(
         ctx.device, ctx.queue, pg_grid, pipelines=kernels.pipelines
@@ -365,6 +410,7 @@ def _run_master_pattern(
             n_sites,
             kij,
             halfw,
+            site_weights=site_weights,
             readback=False,
         )
 
@@ -410,6 +456,7 @@ def _run_master_pattern(
             hw=halfw,
             side=grid_size,
             needs_southern_hemisphere=needs_southern,
+            site_weights=site_weights,
         )
     finally:
         rasterizer.destroy()

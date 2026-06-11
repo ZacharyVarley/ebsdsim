@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
-
+from ebsdsim._version import __version__
 from ebsdsim.api import Atom, Cell, Material, MasterPattern, master_pattern, master_pattern_from_cif
+from ebsdsim.normalize import NormalizeMode
 from ebsdsim.mploader import LoadedMasterPattern, load_master_pattern, save_png_gray, to_uint8
 from ebsdsim.save import save_master_pattern
-
-try:
-    __version__ = version("ebsdsim")
-except PackageNotFoundError:
-    __version__ = "0.0.0+dev"
 
 __all__ = [
     "Atom",
@@ -19,6 +14,7 @@ __all__ = [
     "LoadedMasterPattern",
     "Material",
     "MasterPattern",
+    "NormalizeMode",
     "__version__",
     "load_master_pattern",
     "master_pattern",

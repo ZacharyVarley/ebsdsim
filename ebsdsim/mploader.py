@@ -13,9 +13,9 @@ needs no crystallographic tables of its own.
 Quick start
 -----------
 >>> from ebsdsim.mploader import load_master_pattern, to_uint8, save_png_gray
->>> mp = load_master_pattern("GaN-master-pattern.npz")
->>> mp.data.shape          # (energy, site, hemisphere, H, W), built on load
->>> nh = mp.data[0, 0, 0]  # energy-integrated, site-integrated, north hemisphere
+>>> mp = load_master_pattern("GaN-master-pattern.npz")  # raw Lambert data in mp.data
+>>> disp, _ = mp.lambert_data(normalize="robust")  # display scaling on demand
+>>> nh = disp[0, 0, 0]  # energy-integrated, site-integrated, north hemisphere
 >>> save_png_gray(to_uint8(nh), "GaN_integrated_nh.png")
 """
 
@@ -30,6 +30,60 @@ from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
+
+NormalizeMode = Literal["minmax", "robust"]
+
+
+def _percentile(sorted_vals: NDArray[np.float32], p: float) -> float:
+    idx = min(sorted_vals.size - 1, max(0, int(np.floor(p * (sorted_vals.size - 1)))))
+    return float(sorted_vals[idx])
+
+
+def scale_fs_channel(
+    vals: NDArray[np.floating],
+    normalize: NormalizeMode | None,
+    *,
+    robust_p_low: float = 0.01,
+    robust_p_high: float = 0.99,
+) -> NDArray[np.float32]:
+    """Scale one fundamental-sector channel to ``[0, 1]`` for display."""
+    arr = np.asarray(vals, dtype=np.float32)
+    if normalize is None:
+        return arr.copy() if arr.dtype != np.float32 else arr.astype(np.float32, copy=False)
+    if arr.size == 0:
+        return arr.copy()
+    if normalize == "minmax":
+        lo = float(np.min(arr))
+        hi = float(np.max(arr))
+    elif normalize == "robust":
+        if not (0.0 <= robust_p_low < robust_p_high <= 1.0):
+            raise ValueError("robust_p_low and robust_p_high must satisfy 0 <= low < high <= 1")
+        sorted_vals = np.sort(arr)
+        q1 = _percentile(sorted_vals, 0.25)
+        q3 = _percentile(sorted_vals, 0.75)
+        iqr = q3 - q1
+        if iqr > 0:
+            lo_bound = q1 - 3 * iqr
+            hi_bound = q3 + 3 * iqr
+            good = sorted_vals[(sorted_vals >= lo_bound) & (sorted_vals <= hi_bound)]
+            if good.size > 0:
+                lo = _percentile(good, robust_p_low)
+                hi = _percentile(good, robust_p_high)
+            else:
+                lo = float(sorted_vals[0])
+                hi = float(sorted_vals[-1])
+        else:
+            lo = float(sorted_vals[0])
+            hi = float(sorted_vals[-1])
+    else:
+        raise ValueError(f"unknown normalize mode: {normalize!r}")
+    span = hi - lo
+    out = np.zeros_like(arr)
+    if span <= 1e-15:
+        return out
+    out[:] = np.clip((arr - lo) / span, 0.0, 1.0)
+    return out
+
 
 __all__ = [
     "LoadedMasterPattern",
@@ -104,10 +158,12 @@ def _orbit_fs_representative(
     eps: float,
 ) -> NDArray[np.float64]:
     """Map each direction to its fundamental-sector representative (vectorized)."""
-    transformed = np.einsum("gij,nj->ngi", ops, dirs, optimize=True)
+    op_mats = np.asarray(ops, dtype=np.float64).reshape(-1, 3, 3)
+    transformed = np.einsum("gij,nj->ngi", op_mats, dirs, optimize=True)
     if normals.size == 0:
         return transformed[:, 0, :]
-    margins = np.einsum("ngi,mi->ngm", transformed, normals, optimize=True)
+    normal_mats = np.asarray(normals, dtype=np.float64).reshape(-1, 3)
+    margins = np.einsum("ngi,mi->ngm", transformed, normal_mats, optimize=True)
     min_margins = margins.min(axis=2)
     in_fs = min_margins >= -eps
     has_in_fs = in_fs.any(axis=1)
@@ -181,36 +237,39 @@ def _sample_sheets(
     return out.astype(np.float32)
 
 
-def _robust_normalize(vals: NDArray[np.float32], robust: bool) -> NDArray[np.float32]:
-    """Normalize to [0, 1], optionally clipping IQR outliers (matches the viewer)."""
-    if vals.size == 0:
-        return vals.astype(np.float32, copy=True)
-    out = np.zeros_like(vals, dtype=np.float32)
-    if robust:
-        sorted_vals = np.sort(vals)
+def _reduce_over_sites(
+    values_fs: NDArray[np.floating],
+    site_weights: NDArray[np.floating] | None,
+) -> NDArray[np.float32]:
+    arr = np.asarray(values_fs, dtype=np.float32)
+    if arr.ndim == 1:
+        return arr.astype(np.float32, copy=False)
+    if arr.shape[1] == 1:
+        return arr[:, 0].astype(np.float32, copy=False)
+    if site_weights is None:
+        return arr.mean(axis=1, dtype=np.float32)
+    w = np.asarray(site_weights, dtype=np.float64).reshape(-1)
+    if w.size != arr.shape[1]:
+        return arr.mean(axis=1, dtype=np.float32)
+    w = w / w.sum()
+    return (arr.astype(np.float64) * w).sum(axis=1).astype(np.float32)
 
-        def q(p: float) -> float:
-            idx = min(sorted_vals.size - 1, max(0, int(np.floor(p * (sorted_vals.size - 1)))))
-            return float(sorted_vals[idx])
 
-        q1, q3 = q(0.25), q(0.75)
-        iqr = q3 - q1
-        if iqr > 0:
-            good = sorted_vals[(sorted_vals >= q1 - 3 * iqr) & (sorted_vals <= q3 + 3 * iqr)]
-            if good.size > 0:
-                lo = float(good[int(np.floor(0.01 * (good.size - 1)))])
-                hi = float(good[int(np.floor(0.99 * (good.size - 1)))])
-            else:
-                lo, hi = float(sorted_vals[0]), float(sorted_vals[-1])
-        else:
-            lo, hi = float(sorted_vals[0]), float(sorted_vals[-1])
-    else:
-        lo, hi = float(np.min(vals)), float(np.max(vals))
-    span = hi - lo
-    if span <= 1e-15:
-        return out
-    out[:] = np.clip((vals - lo) / span, 0.0, 1.0)
-    return out
+def _site_weights_from_meta_cell(meta_cell: dict) -> NDArray[np.float32] | None:
+    sites = meta_cell.get("sites")
+    if not sites:
+        return None
+    w = np.array(
+        [
+            float(s.get("occupancy", 1.0)) * float(s.get("multiplicity") or 1)
+            for s in sites
+        ],
+        dtype=np.float64,
+    )
+    total = float(w.sum())
+    if total <= 0:
+        return None
+    return (w / total).astype(np.float32)
 
 
 def _build_pixel_source_map(
@@ -243,8 +302,10 @@ def build_master_pattern_data(
     hw: int,
     side: int,
     needs_southern_hemisphere: bool,
-    normalize: bool = True,
-    robust: bool = True,
+    site_weights: NDArray[np.floating] | None = None,
+    normalize: NormalizeMode | None = None,
+    robust_p_low: float = 0.01,
+    robust_p_high: float = 0.99,
     interp: Literal["nearest", "bilinear"] = "bilinear",
 ) -> tuple[NDArray[np.float32], dict[str, Any]]:
     """Expand the fundamental sector into a dense ``(E, S, H, side, side)`` tensor.
@@ -293,7 +354,7 @@ def build_master_pattern_data(
     channels = np.empty((n_k, n_channels), dtype=np.float32)
     c = 0
     for esrc in energy_sources:
-        mean_dir = esrc.mean(axis=1, dtype=np.float32) if multi_site else esrc[:, 0]
+        mean_dir = _reduce_over_sites(esrc, site_weights) if multi_site else esrc[:, 0]
         if multi_site:
             channels[:, c] = mean_dir
             c += 1
@@ -304,9 +365,14 @@ def build_master_pattern_data(
             channels[:, c] = mean_dir
             c += 1
 
-    if normalize:
+    if normalize is not None:
         for ci in range(n_channels):
-            channels[:, ci] = _robust_normalize(channels[:, ci], robust)
+            channels[:, ci] = scale_fs_channel(
+                channels[:, ci],
+                normalize,
+                robust_p_low=robust_p_low,
+                robust_p_high=robust_p_high,
+            )
 
     plane = side * side
     ix = kij[:, 0].astype(np.intp) + hw
@@ -318,8 +384,8 @@ def build_master_pattern_data(
     sheet_nh[dst[north]] = channels[north]
 
     h_dim = 2 if needs_southern_hemisphere else 1
-    ops = np.asarray(pg_operators, dtype=np.float64)
-    normals = np.asarray(fs_normals, dtype=np.float64)
+    ops = np.asarray(pg_operators, dtype=np.float64).reshape(-1, 3, 3)
+    normals = np.asarray(fs_normals, dtype=np.float64).reshape(-1, 3)
 
     def _to_chw(out_pc: NDArray[np.float32]) -> NDArray[np.float32]:
         return out_pc.T.reshape(n_channels, side, side)
@@ -329,22 +395,27 @@ def build_master_pattern_data(
 
     data = np.empty((e_dim, s_dim, h_dim, side, side), dtype=np.float32)
 
+    def _maybe_clip(arr: NDArray[np.float32]) -> NDArray[np.float32]:
+        if normalize is not None:
+            return np.clip(arr, 0.0, 1.0)
+        return arr
+
     if h_dim == 1:
-        nh = np.clip(nh_from_nh, 0.0, 1.0)
+        nh = _maybe_clip(nh_from_nh)
         data[:, :, 0] = _to_chw(nh).reshape(e_dim, s_dim, side, side)
     else:
         sheet_sh = np.zeros((plane, n_channels), dtype=np.float32)
         sheet_sh[dst[~north]] = channels[~north]
         from_sh_n_col = (from_sh_n != 0)[:, None]
         nh_from_sh = _sample_sheets(sheet_sh, side, sx_n, sy_n, interp)
-        nh = np.clip(np.where(from_sh_n_col, nh_from_sh, nh_from_nh), 0.0, 1.0)
+        nh = _maybe_clip(np.where(from_sh_n_col, nh_from_sh, nh_from_nh).astype(np.float32))
         data[:, :, 0] = _to_chw(nh).reshape(e_dim, s_dim, side, side)
 
         sx_s, sy_s, from_sh_s = _build_pixel_source_map(hw, True, ops, normals)
         from_sh_s_col = (from_sh_s != 0)[:, None]
         sh_from_nh = _sample_sheets(sheet_nh, side, sx_s, sy_s, interp)
         sh_from_sh = _sample_sheets(sheet_sh, side, sx_s, sy_s, interp)
-        sh = np.clip(np.where(from_sh_s_col, sh_from_sh, sh_from_nh), 0.0, 1.0)
+        sh = _maybe_clip(np.where(from_sh_s_col, sh_from_sh, sh_from_nh).astype(np.float32))
         data[:, :, 1] = _to_chw(sh).reshape(e_dim, s_dim, side, side)
 
     axes = {
@@ -377,6 +448,7 @@ class LoadedMasterPattern:
     fs_normals: NDArray[np.float64]  # (n_normals, 3)
     bin_voltages_kv: NDArray[np.float32]
     bin_weights: NDArray[np.float32]
+    site_weights: NDArray[np.float32] | None = None
     data: NDArray[np.float32] = field(default_factory=lambda: np.zeros((0,), np.float32))
     axes: dict[str, Any] = field(default_factory=dict)
     _maps: dict[bool, tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.uint8]]] = field(
@@ -416,13 +488,37 @@ class LoadedMasterPattern:
 
     # -- expansion -------------------------------------------------------- #
     def reduce_over_sites(self, values_fs: NDArray[np.floating]) -> NDArray[np.float32]:
-        """Collapse a ``(n_k, n_sites)`` array to one value per direction (site mean)."""
-        arr = np.asarray(values_fs, dtype=np.float32)
-        if arr.ndim == 1:
-            return arr
-        if arr.shape[1] == 1:
-            return arr[:, 0]
-        return arr.mean(axis=1, dtype=np.float32)
+        """Collapse a ``(n_k, n_sites)`` array to one value per direction."""
+        return _reduce_over_sites(values_fs, self.site_weights)
+
+    def lambert_data(
+        self,
+        *,
+        normalize: NormalizeMode | None = None,
+        robust_p_low: float = 0.01,
+        robust_p_high: float = 0.99,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Expand raw FS intensities to Lambert ``(E, S, H, side, side)``.
+
+        ``normalize`` is ``None`` (raw), ``"minmax"``, or ``"robust"``. Display
+        scaling is applied on demand only; :attr:`data` always stays raw.
+        """
+        if normalize is None:
+            return self.data, self.axes
+        return build_master_pattern_data(
+            integrated_fs=self.integrated_fs,
+            bin_fs=self.bin_fs,
+            kij=self.kij,
+            pg_operators=self.pg_operators,
+            fs_normals=self.fs_normals,
+            hw=self.halfw,
+            side=self.side,
+            needs_southern_hemisphere=self.needs_southern_hemisphere,
+            site_weights=self.site_weights,
+            normalize=normalize,
+            robust_p_low=robust_p_low,
+            robust_p_high=robust_p_high,
+        )
 
     def _pixel_map(self, southern: bool):
         if southern not in self._maps:
@@ -435,8 +531,9 @@ class LoadedMasterPattern:
         self,
         values_fs: NDArray[np.floating] | None = None,
         *,
-        normalize: bool = True,
-        robust: bool = True,
+        normalize: NormalizeMode | None = None,
+        robust_p_low: float = 0.01,
+        robust_p_high: float = 0.99,
         interp: Literal["nearest", "bilinear"] = "bilinear",
     ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """Expand fundamental-sector values into full ``(side, side)`` hemispheres.
@@ -447,7 +544,12 @@ class LoadedMasterPattern:
         if values_fs is None:
             values_fs = self.integrated_fs
         per_dir = self.reduce_over_sites(values_fs)
-        vals = _robust_normalize(per_dir.astype(np.float32), robust) if normalize else per_dir.astype(np.float32)
+        vals = scale_fs_channel(
+            per_dir,
+            normalize,
+            robust_p_low=robust_p_low,
+            robust_p_high=robust_p_high,
+        )
 
         side = self.side
         hw = self.halfw
@@ -464,17 +566,22 @@ class LoadedMasterPattern:
 
         sx_n, sy_n, from_sh_n = self._pixel_map(False)
         nh_from_nh = _sample_sheet(sheet_nh, side, sx_n, sy_n, interp)
+        def _maybe_clip(arr: NDArray[np.float32]) -> NDArray[np.float32]:
+            if normalize is not None:
+                return np.clip(arr, 0.0, 1.0).astype(np.float32, copy=False)
+            return arr.astype(np.float32, copy=False)
+
         if self.is_centrosymmetric:
-            nh = np.clip(nh_from_nh, 0.0, 1.0).astype(np.float32).reshape(side, side)
+            nh = _maybe_clip(nh_from_nh).reshape(side, side)
             return nh, nh.copy()
 
         nh_from_sh = _sample_sheet(sheet_sh, side, sx_n, sy_n, interp)
-        nh = np.clip(np.where(from_sh_n != 0, nh_from_sh, nh_from_nh), 0.0, 1.0).astype(np.float32)
+        nh = _maybe_clip(np.where(from_sh_n != 0, nh_from_sh, nh_from_nh).astype(np.float32))
 
         sx_s, sy_s, from_sh_s = self._pixel_map(True)
         sh_from_nh = _sample_sheet(sheet_nh, side, sx_s, sy_s, interp)
         sh_from_sh = _sample_sheet(sheet_sh, side, sx_s, sy_s, interp)
-        sh = np.clip(np.where(from_sh_s != 0, sh_from_sh, sh_from_nh), 0.0, 1.0).astype(np.float32)
+        sh = _maybe_clip(np.where(from_sh_s != 0, sh_from_sh, sh_from_nh).astype(np.float32))
         return nh.reshape(side, side), sh.reshape(side, side)
 
     def reconstruct_integrated(
@@ -522,12 +629,20 @@ def _deconsolidate_fundamental_sector(
 
 
 def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
-    """Load an ebsdsim master-pattern ``.npz`` written by ``save_master_pattern``."""
+    """Load an ebsdsim master-pattern ``.npz`` written by ``save_master_pattern``.
+
+    The returned :attr:`LoadedMasterPattern.data` is always raw. Call
+    :meth:`LoadedMasterPattern.lambert_data` for display scaling.
+    """
     with np.load(Path(path), allow_pickle=False) as data:
         meta_bytes = bytes(np.asarray(data["meta_json"], dtype=np.uint8).tobytes())
         meta = json.loads(meta_bytes.decode("utf-8")) if meta_bytes else {}
         bin_voltages_kv = np.asarray(data["bin_voltages_kv"], dtype=np.float32)
         bin_weights = np.asarray(data["bin_weights"], dtype=np.float32)
+        if "site_weights" in data:
+            site_weights = np.asarray(data["site_weights"], dtype=np.float32).reshape(-1)
+        else:
+            site_weights = _site_weights_from_meta_cell(meta.get("cell", {}))
         if "fundamental_sector" in data:
             integrated_fs, bin_fs = _deconsolidate_fundamental_sector(
                 np.asarray(data["fundamental_sector"], dtype=np.float32),
@@ -546,6 +661,7 @@ def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
             fs_normals=np.asarray(data["fs_normals"], dtype=np.float64),
             bin_voltages_kv=bin_voltages_kv,
             bin_weights=bin_weights,
+            site_weights=site_weights,
         )
     loaded.data, loaded.axes = build_master_pattern_data(
         integrated_fs=loaded.integrated_fs,
@@ -556,6 +672,7 @@ def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
         hw=loaded.halfw,
         side=loaded.side,
         needs_southern_hemisphere=loaded.needs_southern_hemisphere,
+        site_weights=loaded.site_weights,
     )
     return loaded
 

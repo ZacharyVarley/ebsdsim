@@ -30,6 +30,9 @@ Arrays written
     Inward normals bounding the fundamental sector.
 ``bin_voltages_kv`` / ``bin_weights`` : float32 ``(n_bins,)``
     Beam voltage and energy weight of each saved bin.
+``site_weights`` : float32 ``(n_sites,)``
+    Normalized occupancy × multiplicity weights used for the site-integrated
+    marginal (index 0 on the site axis). Per-site slices are raw intensities.
 ``meta_json`` : uint8 ``(n_bytes,)``
     UTF-8 JSON metadata blob (decode with ``bytes(arr).decode("utf-8")``).
 """
@@ -45,6 +48,7 @@ import numpy as np
 from ebsdsim.elements import element_symbol
 from ebsdsim.pg_ops import fs_normals, pg_num_to_symbol, point_group_operators
 from ebsdsim.types import Cell
+from ebsdsim.weights import reduce_over_sites, site_weights_from_meta_cell
 
 if TYPE_CHECKING:  # pragma: no cover
     from ebsdsim.api import MasterPattern
@@ -111,6 +115,7 @@ def _stack_bins(bin_patterns: list[np.ndarray], n_k: int, n_sites: int) -> np.nd
 def _consolidate_fundamental_sector(
     integrated_fs: np.ndarray,  # (n_k, n_sites)
     bin_fs: np.ndarray,  # (n_bins, n_k, n_sites)
+    site_weights: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Pack integrated + per-bin and mean + per-site into one ``(E, S, n_k)`` array.
 
@@ -133,7 +138,7 @@ def _consolidate_fundamental_sector(
 
     def _fill(e_idx: int, src: np.ndarray) -> None:  # src: (n_k, n_sites)
         if multi_site:
-            out[e_idx, 0] = src.mean(axis=1, dtype=np.float32)
+            out[e_idx, 0] = reduce_over_sites(src, site_weights)
             for s in range(n_sites):
                 out[e_idx, 1 + s] = src[:, s]
         else:
@@ -174,7 +179,12 @@ def save_master_pattern(mp: "MasterPattern", path: str | Path) -> Path:
     n_sites = int(mp.n_sites)
     integrated_fs = np.asarray(mp.integrated, dtype=np.float32).reshape(n_k, n_sites)
     bin_fs = _stack_bins(list(mp.bin_patterns), n_k, n_sites)
-    fundamental_sector, fs_axes = _consolidate_fundamental_sector(integrated_fs, bin_fs)
+    site_weights = site_weights_from_meta_cell(mp.metadata.get("cell", {}))
+    if site_weights is None:
+        site_weights = np.full(n_sites, 1.0 / max(n_sites, 1), dtype=np.float32)
+    fundamental_sector, fs_axes = _consolidate_fundamental_sector(
+        integrated_fs, bin_fs, site_weights
+    )
 
     kij = np.asarray(mp.kij, dtype=np.int32).reshape(n_k, 3)
     khat = np.asarray(mp.khat, dtype=np.float32).reshape(n_k, 3)
@@ -209,6 +219,7 @@ def save_master_pattern(mp: "MasterPattern", path: str | Path) -> Path:
         fs_normals=normals,
         bin_voltages_kv=bin_voltages_kv,
         bin_weights=bin_weights,
+        site_weights=np.asarray(site_weights, dtype=np.float32).reshape(-1),
         meta_json=meta_bytes,
     )
     return out_path

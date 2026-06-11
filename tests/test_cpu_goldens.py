@@ -28,7 +28,7 @@ def _load_golden(name: str) -> dict:
 
 def test_kgrid_rasterize_golden_case0():
     data = _load_golden("kgrid_rasterize_golden.json")
-    opts = RasterizeOptions(robust_norm=False, interp_mode="bilinear")
+    opts = RasterizeOptions(normalize="minmax", interp_mode="bilinear")
     for case in data["cases"]:
         grid_info = case["grid"]
         pg_grid = build_pg_k_grid(int(grid_info["pg_num"]), int(grid_info["hw"]))

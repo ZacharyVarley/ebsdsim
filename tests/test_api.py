@@ -20,9 +20,9 @@ def _gpu_available() -> bool:
 
 
 def test_import():
-    from importlib.metadata import version
+    from ebsdsim._version import __version__ as declared_version
 
-    assert es.__version__ == version("ebsdsim")
+    assert es.__version__ == declared_version
     assert callable(es.master_pattern)
     assert callable(es.master_pattern_from_cif)
 
