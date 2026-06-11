@@ -1,10 +1,8 @@
-<p align="center">
-  <img src="docs/ebsdsim-banner.png" alt="ebsdsim — dynamical EBSD master patterns" width="100%">
-</p>
+![ebsdsim — dynamical EBSD master patterns](https://raw.githubusercontent.com/ZacharyVarley/ebsdsim/main/docs/ebsdsim-banner.png)
 
 # ebsdsim
 
-[![PyPI](https://img.shields.io/pypi/v/ebsdsim)](https://pypi.org/project/ebsdsim/)
+[![CI](https://github.com/ZacharyVarley/ebsdsim/actions/workflows/ci.yml/badge.svg)](https://github.com/ZacharyVarley/ebsdsim/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/pypi/pyversions/ebsdsim)](https://pypi.org/project/ebsdsim/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
