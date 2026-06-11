@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400" viewBox="0 0 1600 400" role="img" aria-labelledby="title desc">
+  <title id="title">ebsdsim banner</title>
+  <desc id="desc">Banner for ebsdsim emphasizing dynamical EBSD master patterns and EBSD master-pattern simulation.</desc>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#030914"/>
+      <stop offset="45%" stop-color="#051224"/>
+      <stop offset="100%" stop-color="#091d36"/>
+    </linearGradient>
+    <radialGradient id="discFill" cx="50%" cy="48%" r="65%">
+      <stop offset="0%" stop-color="#18304b"/>
+      <stop offset="55%" stop-color="#0f2237"/>
+      <stop offset="100%" stop-color="#081321"/>
+    </radialGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#8fd2ff"/>
+    </linearGradient>
+    <linearGradient id="subtitleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#dcefff"/>
+      <stop offset="100%" stop-color="#6ec6ff"/>
+    </linearGradient>
+    <radialGradient id="glowBlue" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="24%" stop-color="#b8e8ff" stop-opacity="0.65"/>
+      <stop offset="70%" stop-color="#61c6ff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#61c6ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="bandGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 0.9 0" result="soft"/>
+      <feMerge>
+        <feMergeNode in="soft"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="blurSmall">
+      <feGaussianBlur stdDeviation="1.8"/>
+    </filter>
+    <clipPath id="discClip">
+      <circle cx="1220" cy="200" r="155"/>
+    </clipPath>
+    <pattern id="microGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#89d2ff" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="400" fill="url(#bgGrad)"/>
+  <rect width="1600" height="400" fill="url(#microGrid)" opacity="0.45"/>
+
+  <!-- subtle left-side atmosphere -->
+  <circle cx="200" cy="90" r="280" fill="#0d2a46" opacity="0.10"/>
+  <circle cx="280" cy="360" r="220" fill="#14385d" opacity="0.08"/>
+
+  <!-- Right spherical projection grid behind disc -->
+  <g opacity="0.34" stroke="#2d7fba" fill="none">
+    <ellipse cx="1220" cy="200" rx="360" ry="185" stroke-opacity="0.16" stroke-width="1.2"/>
+    <ellipse cx="1220" cy="200" rx="305" ry="160" stroke-opacity="0.11" stroke-width="1.0"/>
+    <ellipse cx="1220" cy="200" rx="255" ry="132" stroke-opacity="0.10" stroke-width="1.0"/>
+    <ellipse cx="1220" cy="200" rx="205" ry="107" stroke-opacity="0.10" stroke-width="1.0"/>
+    <ellipse cx="1220" cy="200" rx="165" ry="86" stroke-opacity="0.09" stroke-width="1.0"/>
+    <ellipse cx="1220" cy="200" rx="360" ry="185" transform="rotate(90 1220 200)" stroke-opacity="0.08" stroke-width="1.1"/>
+    <ellipse cx="1220" cy="200" rx="300" ry="155" transform="rotate(90 1220 200)" stroke-opacity="0.06" stroke-width="1.0"/>
+    <ellipse cx="1220" cy="200" rx="250" ry="130" transform="rotate(90 1220 200)" stroke-opacity="0.06" stroke-width="1.0"/>
+    <path d="M860,200 H1580" stroke-opacity="0.10" stroke-width="1.0"/>
+  </g>
+
+  <!-- Text block -->
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="70" y="150" font-size="112" font-weight="800" letter-spacing="-4" fill="url(#titleGrad)">ebsdsim</text>
+    <text x="72" y="244" font-size="56" font-weight="650" letter-spacing="-1.2" fill="url(#subtitleGrad)">Dynamical EBSD master patterns</text>
+    <line x1="72" y1="282" x2="690" y2="282" stroke="#36a9f5" stroke-width="2.2" stroke-opacity="0.85"/>
+    <circle cx="72" cy="282" r="4.5" fill="#9ae0ff" filter="url(#softGlow)"/>
+    <text x="72" y="335" font-size="28" font-weight="400" fill="#e4edf7" fill-opacity="0.92">EBSD master-pattern simulation for Python</text>
+  </g>
+
+  <!-- Master pattern disc -->
+  <g>
+    <circle cx="1220" cy="200" r="155" fill="url(#discFill)" stroke="#63c3ff" stroke-width="2.4"/>
+    <circle cx="1220" cy="200" r="172" fill="none" stroke="#38aef5" stroke-opacity="0.10" stroke-width="1.0"/>
+    <circle cx="1220" cy="200" r="182" fill="none" stroke="#38aef5" stroke-opacity="0.05" stroke-width="1.0"/>
+
+    <g clip-path="url(#discClip)">
+      <rect x="1060" y="40" width="320" height="320" fill="url(#discFill)"/>
+
+      <!-- broad diffuse bands -->
+      <g stroke="#8cdfff" stroke-linecap="round" filter="url(#bandGlow)">
+        <line x1="1062" y1="198" x2="1378" y2="202" stroke-width="28" stroke-opacity="0.16"/>
+        <line x1="1218" y1="42" x2="1222" y2="358" stroke-width="24" stroke-opacity="0.15"/>
+        <line x1="1080" y1="88" x2="1360" y2="312" stroke-width="24" stroke-opacity="0.14"/>
+        <line x1="1080" y1="312" x2="1360" y2="88" stroke-width="24" stroke-opacity="0.14"/>
+        <line x1="1110" y1="62" x2="1330" y2="338" stroke-width="18" stroke-opacity="0.12"/>
+        <line x1="1110" y1="338" x2="1330" y2="62" stroke-width="18" stroke-opacity="0.12"/>
+        <line x1="1068" y1="118" x2="1372" y2="282" stroke-width="16" stroke-opacity="0.10"/>
+        <line x1="1068" y1="282" x2="1372" y2="118" stroke-width="16" stroke-opacity="0.10"/>
+      </g>
+
+      <!-- brighter band centers -->
+      <g stroke="#f3fbff" stroke-linecap="round" filter="url(#softGlow)">
+        <line x1="1060" y1="200" x2="1380" y2="200" stroke-width="8.5" stroke-opacity="0.82"/>
+        <line x1="1220" y1="40" x2="1220" y2="360" stroke-width="7.4" stroke-opacity="0.74"/>
+        <line x1="1082" y1="88" x2="1358" y2="312" stroke-width="7.2" stroke-opacity="0.76"/>
+        <line x1="1082" y1="312" x2="1358" y2="88" stroke-width="7.2" stroke-opacity="0.76"/>
+        <line x1="1112" y1="62" x2="1328" y2="338" stroke-width="5.2" stroke-opacity="0.64"/>
+        <line x1="1112" y1="338" x2="1328" y2="62" stroke-width="5.2" stroke-opacity="0.64"/>
+        <line x1="1068" y1="118" x2="1372" y2="282" stroke-width="4.2" stroke-opacity="0.58"/>
+        <line x1="1068" y1="282" x2="1372" y2="118" stroke-width="4.2" stroke-opacity="0.58"/>
+      </g>
+
+      <!-- curved EBSD-like arcs -->
+      <g fill="none" stroke-linecap="round">
+        <path d="M 1085 120 Q 1220 78 1355 120" stroke="#d8f5ff" stroke-opacity="0.34" stroke-width="3.6" filter="url(#softGlow)"/>
+        <path d="M 1085 280 Q 1220 322 1355 280" stroke="#d8f5ff" stroke-opacity="0.34" stroke-width="3.6" filter="url(#softGlow)"/>
+        <path d="M 1120 78 Q 1168 200 1120 322" stroke="#d8f5ff" stroke-opacity="0.26" stroke-width="3.2" filter="url(#softGlow)"/>
+        <path d="M 1320 78 Q 1272 200 1320 322" stroke="#d8f5ff" stroke-opacity="0.26" stroke-width="3.2" filter="url(#softGlow)"/>
+        <path d="M 1068 165 Q 1220 126 1372 165" stroke="#91d9ff" stroke-opacity="0.22" stroke-width="10" filter="url(#blurSmall)"/>
+        <path d="M 1068 235 Q 1220 274 1372 235" stroke="#91d9ff" stroke-opacity="0.22" stroke-width="10" filter="url(#blurSmall)"/>
+      </g>
+
+      <!-- inner projection grid -->
+      <g stroke="#74cfff" fill="none" stroke-opacity="0.28">
+        <circle cx="1220" cy="200" r="114" stroke-dasharray="5 8" stroke-width="1.0"/>
+        <circle cx="1220" cy="200" r="70" stroke-dasharray="4 7" stroke-width="1.0"/>
+        <path d="M 1065 200 H 1375" stroke-dasharray="5 6" stroke-width="0.9"/>
+        <path d="M 1220 45 V 355" stroke-dasharray="5 6" stroke-width="0.9"/>
+      </g>
+
+      <!-- diffuse texture -->
+      <g fill="#ffffff" fill-opacity="0.12">
+        <circle cx="1140" cy="154" r="6" filter="url(#softGlow)"/>
+        <circle cx="1220" cy="200" r="9" filter="url(#softGlow)"/>
+        <circle cx="1303" cy="154" r="6" filter="url(#softGlow)"/>
+        <circle cx="1303" cy="246" r="5" filter="url(#softGlow)"/>
+        <circle cx="1140" cy="246" r="5" filter="url(#softGlow)"/>
+        <circle cx="1220" cy="88" r="4" filter="url(#softGlow)"/>
+        <circle cx="1220" cy="312" r="4" filter="url(#softGlow)"/>
+      </g>
+
+      <circle cx="1220" cy="200" r="38" fill="url(#glowBlue)"/>
+    </g>
+  </g>
+</svg>

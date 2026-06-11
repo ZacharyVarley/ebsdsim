@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+recursive-include docs *
+recursive-include ebsdsim/wgsl *.wgsl
+recursive-include ebsdsim/data *
+recursive-include examples *.ipynb

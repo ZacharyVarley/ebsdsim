@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ebsdsim"
+version = "0.1.0"
+description = "GPU-accelerated dynamical EBSD master-pattern simulation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Zachary Varley", email = "zacharytvarley@gmail.com" }]
+keywords = [
+  "EBSD",
+  "electron backscatter diffraction",
+  "master pattern",
+  "dynamical diffraction",
+  "Kikuchi",
+  "crystallography",
+  "Monte Carlo",
+  "WebGPU",
+  "wgpu",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+  "numpy>=1.21",
+  "wgpu>=0.29",
+]
+
+[project.urls]
+Homepage = "https://github.com/ZacharyVarley/ebsdsim"
+Repository = "https://github.com/ZacharyVarley/ebsdsim"
+Issues = "https://github.com/ZacharyVarley/ebsdsim/issues"
+Changelog = "https://github.com/ZacharyVarley/ebsdsim/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.0",
+  "pytest>=7.0",
+]
+docs = [
+  "jupyter>=1.0",
+  "matplotlib>=3.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["ebsdsim*"]
+
+[tool.setuptools.package-data]
+ebsdsim = ["wgsl/*.wgsl", "data/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["slow: long GPU end-to-end tests"]
+
