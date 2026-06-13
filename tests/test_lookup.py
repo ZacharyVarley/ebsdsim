@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import importlib.resources
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
 
+import pytest
 import numpy as np
 
 from ebsdsim.cif import parse_cif_crystal
@@ -173,3 +179,60 @@ def test_coupling_candidates_matches_streaming():
         lu.mlambda,
     )
     assert np.max(np.abs(stream - cand)) < 1e-5
+
+
+# Script to test multiprocessing context error
+PREFETCHER_SCRIPT = textwrap.dedent("""\
+    import multiprocessing
+    import ebsdsim.lookup as _lookup
+    import importlib.resources
+    from ebsdsim.cif import parse_cif_crystal
+    from ebsdsim.lookup import LookupPrefetcher, prepare_diff_lookup_geometry
+    from ebsdsim.structure import build_cell_from_cif
+
+    if {use_spawn!r}:
+        _lookup._MP_CONTEXT = multiprocessing.get_context("spawn")
+
+    text = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif").read_text()
+    cell = build_cell_from_cif(parse_cif_crystal(text))
+    geom = prepare_diff_lookup_geometry(cell, 0.08)
+    prefetcher = LookupPrefetcher(geom, 0.08, "bloch")
+    try:
+        prefetcher.prefetch(19.5)
+        prefetcher.get(19.5)
+    finally:
+        prefetcher.close()
+""")
+
+
+def run_prefetcher_script(use_spawn: bool) -> subprocess.CompletedProcess:
+    script = PREFETCHER_SCRIPT.format(use_spawn=use_spawn)
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
+        f.write(script)
+        path = f.name
+    try:
+        return subprocess.run([sys.executable, path], capture_output=True, timeout=60)
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="spawn is the only start method on Windows"
+)
+def test_prefetcher_spawn_context_fails_from_script():
+    """Without the fork context fix, spawn re-imports __main__ and
+    crashes.
+    """
+    result = run_prefetcher_script(use_spawn=True)
+    assert result.returncode != 0
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="fork context is not available on Windows"
+)
+def test_prefetcher_fork_context_succeeds_from_script():
+    """The fork context fix allows LookupPrefetcher to work from a plain
+    script.
+    """
+    result = run_prefetcher_script(use_spawn=False)
+    assert result.returncode == 0
