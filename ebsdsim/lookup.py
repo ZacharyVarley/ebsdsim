@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import multiprocessing
+import sys
 from concurrent.futures import Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
@@ -14,6 +16,14 @@ from ebsdsim.wk import scatter_factor_wk_array
 
 Vec3 = tuple[float, float, float]
 PI = np.pi
+
+# On macOS/Linux, force "fork" so workers don't re-import the caller's
+# __main__ module, which would fail when the library is used from a
+# plain script
+if sys.platform == "win32":
+    _MP_CONTEXT = None
+else:
+    _MP_CONTEXT = multiprocessing.get_context("fork")
 
 
 @dataclass
@@ -457,7 +467,7 @@ def build_lookup_cache(
         return LookupCache({})
     tasks = [(geometry, vkv, dmin, mode) for vkv in unique]
     if parallel and len(tasks) > 1:
-        with ProcessPoolExecutor(max_workers=min(len(tasks), 8)) as pool:
+        with ProcessPoolExecutor(max_workers=min(len(tasks), 8), mp_context=_MP_CONTEXT) as pool:
             pairs = list(pool.map(_build_lookup_entry, tasks))
     else:
         pairs = [_build_lookup_entry(task) for task in tasks]
@@ -477,7 +487,7 @@ class LookupPrefetcher:
 
     def _pool_or_create(self) -> ProcessPoolExecutor:
         if self._pool is None:
-            self._pool = ProcessPoolExecutor(max_workers=1)
+            self._pool = ProcessPoolExecutor(max_workers=1, mp_context=_MP_CONTEXT)
         return self._pool
 
     def prefetch(self, voltage_kv: float) -> None:
