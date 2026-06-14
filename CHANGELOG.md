@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-06-14
+
+### Fixed
+
+- P1 (triclinic) master patterns: point group `1` now uses an empty fundamental-sector
+  normal set so the Lambert grid covers the full hemisphere(s) instead of failing with
+  “No FS normals for PG symbol '1'” ([#3](https://github.com/ZacharyVarley/ebsdsim/issues/3)).
+
+### Changed
+
+- `LookupPrefetcher` builds the next voltage's diff lookup on **one background thread**
+  (`ThreadPoolExecutor`, `max_workers=1`) instead of a process pool. Process pools
+  required OS-specific `fork`/`spawn` handling ([#1](https://github.com/ZacharyVarley/ebsdsim/issues/1),
+  [#2](https://github.com/ZacharyVarley/ebsdsim/pull/2)) and caused `BrokenProcessPool`
+  on macOS when forking after wgpu/threads were already active ([#3](https://github.com/ZacharyVarley/ebsdsim/issues/3)).
+  Threading is the same on macOS, Windows, and Linux: NumPy lookup work overlaps GPU
+  bins without forking or pickling `DiffLookupGeometry`.
+- `build_lookup_cache` is sequential only (removed unused parallel pool path).
+- GPU/API tests use `dmin=0.05` (package default); avoid `dmin > 0.05` in tests.
+
+### Added
+
+- `tests/test_pg_grid.py` for P1 FS normals and k-grid coverage.
+- `scripts/gpu_util_gan.py` — optional per-bin lookup-wait and `nvidia-smi` utilization
+  profiling (`python scripts/gpu_util_gan.py Ni` or `GaN`).
+
 ## [0.1.4] - 2026-06-14
 
 ### Changed
@@ -19,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spawn re-import of `__main__`). Thanks to
   [Håkon Wiik Ånes](https://github.com/hakonanes) ([#2](https://github.com/ZacharyVarley/ebsdsim/pull/2)).
 
-## [0.1.3] - 2026-06-08
+## [0.1.3] - 2026-06-11
 
 ### Changed
 

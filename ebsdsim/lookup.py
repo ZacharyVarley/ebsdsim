@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import multiprocessing
-import sys
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -16,15 +14,6 @@ from ebsdsim.wk import scatter_factor_wk_array
 
 Vec3 = tuple[float, float, float]
 PI = np.pi
-
-# On macOS/Linux, force "fork" so workers don't re-import the caller's
-# __main__ module, which would fail when the library is used from a
-# plain script
-if sys.platform == "win32":
-    _MP_CONTEXT = None
-else:
-    _MP_CONTEXT = multiprocessing.get_context("fork")
-
 
 @dataclass
 class DiffLookupData:
@@ -458,36 +447,37 @@ def build_lookup_cache(
     voltages_kv: NDArray[np.floating],
     dmin: float,
     mode: MasterPatternMode,
-    *,
-    parallel: bool = True,
 ) -> LookupCache:
     """Precompute every voltage's diff lookup (used by tests and offline tooling)."""
     unique = sorted({float(v) for v in np.asarray(voltages_kv).reshape(-1) if float(v) > 0})
     if not unique:
         return LookupCache({})
-    tasks = [(geometry, vkv, dmin, mode) for vkv in unique]
-    if parallel and len(tasks) > 1:
-        with ProcessPoolExecutor(max_workers=min(len(tasks), 8), mp_context=_MP_CONTEXT) as pool:
-            pairs = list(pool.map(_build_lookup_entry, tasks))
-    else:
-        pairs = [_build_lookup_entry(task) for task in tasks]
+    pairs = [
+        _build_lookup_entry((geometry, vkv, dmin, mode))
+        for vkv in unique
+    ]
     return LookupCache(dict(pairs))
 
 
 @dataclass
 class LookupPrefetcher:
-    """Build the next voltage's diff lookup on CPU while GPU runs the current bin."""
+    """Build the next voltage lookup on a background thread during GPU work.
+
+    One thread only — no process pool. Diff lookup is vectorized NumPy; the goal
+    is to hide ~100 ms of CPU work behind each voltage bin's GPU solve so the
+    queue stays warm between bins.
+    """
 
     geometry: DiffLookupGeometry
     dmin: float
     mode: MasterPatternMode
-    _pool: ProcessPoolExecutor | None = field(default=None, init=False, repr=False)
+    _pool: ThreadPoolExecutor | None = field(default=None, init=False, repr=False)
     _future: Future | None = field(default=None, init=False, repr=False)
     _future_vkv: float | None = field(default=None, init=False, repr=False)
 
-    def _pool_or_create(self) -> ProcessPoolExecutor:
+    def _pool_or_create(self) -> ThreadPoolExecutor:
         if self._pool is None:
-            self._pool = ProcessPoolExecutor(max_workers=1, mp_context=_MP_CONTEXT)
+            self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ebsdsim-lookup")
         return self._pool
 
     def prefetch(self, voltage_kv: float) -> None:

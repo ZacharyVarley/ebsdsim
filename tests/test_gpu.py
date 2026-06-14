@@ -66,7 +66,7 @@ def test_prescan_dispatch():
     cell = _ni_cell()
     ctx = require_gpu()
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
-    lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=20.0, dmin=0.08))
+    lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=20.0, dmin=0.05))
     pg = build_pg_k_grid(cell.pg_num, hw=2)
     kvecs = transform_pg_k_grid_to_reciprocal(pg, cell.direct_structure_matrix, lookup.mlambda)
     persistent = kernels.create_persistent_buffers(
@@ -75,7 +75,7 @@ def test_prescan_dispatch():
         diff_table=lookup.diff_table,
         coupling=lookup.coupling,
         reflection_dbdiff=lookup.reflection_dbdiff,
-        sgh_tables=prepare_site_sgh_tables(cell, 0.08).tables,
+        sgh_tables=prepare_site_sgh_tables(cell, 0.05).tables,
     )
     metric = kernels.create_metric_buffer(metric_to_float32(cell))
     try:
@@ -145,7 +145,7 @@ def test_run_one_voltage_small():
     ctx = require_gpu()
     hw = 2
     pg = build_pg_k_grid(cell.pg_num, hw)
-    sgh = prepare_site_sgh_tables(cell, dmin=0.08)
+    sgh = prepare_site_sgh_tables(cell, dmin=0.05)
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     metric = make_metric_buffer(kernels, cell)
     deps = RunOneVoltageDeps(
@@ -156,7 +156,7 @@ def test_run_one_voltage_small():
         metric=metric,
         chunk_size=8,
         rank=4,
-        dmin=0.08,
+        dmin=0.05,
     )
     ctx_bin = PerVoltageContext(
         voltage_kv=20.0,

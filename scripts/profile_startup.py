@@ -17,7 +17,6 @@ from ebsdsim.integrate import next_active_voltage_kv, surrogate_to_multi_voltage
 from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
 from ebsdsim.lookup import (
     BuildLookupOptions,
-    LookupPrefetcher,
     build_diff_lookup_from_geometry,
     prepare_diff_lookup_geometry,
 )

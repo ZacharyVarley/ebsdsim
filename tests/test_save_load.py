@@ -29,7 +29,7 @@ def _gan_pattern(halfw: int = 17):
         gan,
         voltage_kv=20.0,
         halfw=halfw,
-        dmin=0.08,
+        dmin=0.05,
         energy_binwidth_keV=4.0,
         rank=6,
         chunk_size=64,

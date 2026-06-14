@@ -358,23 +358,17 @@ def _run_master_pattern(
     else:
         raise ValueError(f"unknown mc_backend: {mc_backend!r}")
 
-    from concurrent.futures import ThreadPoolExecutor
-
     from ebsdsim.integrate import next_active_voltage_kv, trim_multi_voltage_mc_by_coverage
     from ebsdsim.lookup import LookupPrefetcher, prepare_diff_lookup_geometry
 
     mc_for_bins = trim_multi_voltage_mc_by_coverage(mc, marginal_coverage)
     first_vkv = next_active_voltage_kv(mc_for_bins, -1)
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        f_pg = pool.submit(build_pg_k_grid, cell.pg_num, halfw)
-        f_sgh = pool.submit(prepare_site_sgh_tables, cell, dmin)
-        f_geom = pool.submit(prepare_diff_lookup_geometry, cell, dmin)
-        lookup_geometry = f_geom.result()
-        lookup_prefetcher = LookupPrefetcher(lookup_geometry, dmin, mode)
-        if first_vkv is not None:
-            lookup_prefetcher.prefetch(first_vkv)
-        pg_grid = f_pg.result()
-        sgh = f_sgh.result()
+    lookup_geometry = prepare_diff_lookup_geometry(cell, dmin)
+    lookup_prefetcher = LookupPrefetcher(lookup_geometry, dmin, mode)
+    if first_vkv is not None:
+        lookup_prefetcher.prefetch(first_vkv)
+    pg_grid = build_pg_k_grid(cell.pg_num, halfw)
+    sgh = prepare_site_sgh_tables(cell, dmin)
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     metric = make_metric_buffer(kernels, cell)
     deps = RunOneVoltageDeps(
