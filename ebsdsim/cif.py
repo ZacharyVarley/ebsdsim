@@ -1,10 +1,14 @@
-"""CIF 1.1 tokenizer and crystal parser."""
+"""CIF crystal parser backed by PyCifRW."""
 
 from __future__ import annotations
 
-import enum
+import math
 import re
 from dataclasses import dataclass, field
+from io import StringIO
+
+from CifFile import ReadCif
+
 DEFAULT_B_ISO_ANGSTROM_SQ = 0.5
 
 ELEMENT_SYMBOLS: tuple[str, ...] = (
@@ -27,20 +31,23 @@ ATOMIC_NUMBERS: dict[str, int] = {sym: z for z, sym in enumerate(ELEMENT_SYMBOLS
 ATOMIC_NUMBERS["D"] = 1
 ATOMIC_NUMBERS["T"] = 1
 
-
-class _TK(enum.Enum):
-    DATA_HEADER = enum.auto()
-    SAVE_OPEN = enum.auto()
-    SAVE_CLOSE = enum.auto()
-    LOOP = enum.auto()
-    TAG = enum.auto()
-    VALUE = enum.auto()
-
-
-@dataclass
-class _Token:
-    kind: _TK
-    text: str
+_CELL_LENGTH_TAGS = ("_cell_length_a", "_cell_length_b", "_cell_length_c")
+_CELL_ANGLE_TAGS = ("_cell_angle_alpha", "_cell_angle_beta", "_cell_angle_gamma")
+_SG_NUMBER_TAGS = (
+    "_space_group_it_number",
+    "_symmetry_int_tables_number",
+    "_space_group.it_number",
+)
+_HM_SYMBOL_TAGS = (
+    "_space_group_name_h-m_alt",
+    "_space_group.name_h-m_alt",
+    "_symmetry_space_group_name_h-m",
+    "_space_group_name_h-m",
+)
+_SYMOP_TAGS = (
+    "_space_group_symop_operation_xyz",
+    "_symmetry_equiv_pos_as_xyz",
+)
 
 
 @dataclass
@@ -71,216 +78,56 @@ class CIFCrystal(CIFCellParameters):
     sym_ops: list[str] = field(default_factory=lambda: ["x,y,z"])
 
 
-@dataclass
-class _CIFLoop:
-    tags: list[str]
-    rows: list[list[str]]
-
-
-@dataclass
-class _CIFBlock:
-    name: str
-    tags: dict[str, str]
-    loops: list[_CIFLoop]
-
-
-def _is_whitespace(c: str) -> bool:
-    return c in " \t\r\n"
-
-
-def _strip_bom(text: str) -> str:
-    return text[1:] if text and ord(text[0]) == 0xFEFF else text
-
-
-def _tokenize_cif(raw: str) -> list[_Token]:
-    text = _strip_bom(raw)
-    n = len(text)
-    out: list[_Token] = []
-    i = 0
-    at_line_start = True
-
-    while i < n:
-        c = text[i]
-
-        if c == "#":
-            while i < n and text[i] != "\n":
-                i += 1
-            continue
-
-        if c in " \t\r":
-            i += 1
-            continue
-        if c == "\n":
-            i += 1
-            at_line_start = True
-            continue
-
-        if c == ";" and at_line_start:
-            i += 1
-            start = i
-            end_body = -1
-            while i < n:
-                if text[i] == "\n":
-                    j = i + 1
-                    if j < n and text[j] == ";":
-                        end_body = i
-                        i = j + 1
-                        break
-                i += 1
-            if end_body < 0:
-                raise ValueError("CIF: unterminated semicolon-text block")
-            body = text[start:end_body]
-            if body.startswith("\r\n"):
-                body = body[2:]
-            elif body.startswith("\n"):
-                body = body[1:]
-            if body.endswith("\r\n"):
-                body = body[:-2]
-            elif body.endswith("\n"):
-                body = body[:-1]
-            out.append(_Token(_TK.VALUE, body))
-            at_line_start = False
-            continue
-
-        if c in "'\"":
-            quote = c
-            i += 1
-            start = i
-            closed = False
-            while i < n:
-                if text[i] == quote:
-                    nxt = "\n" if i + 1 >= n else text[i + 1]
-                    if _is_whitespace(nxt) or i + 1 >= n:
-                        out.append(_Token(_TK.VALUE, text[start:i]))
-                        i += 1
-                        closed = True
-                        break
-                if text[i] == "\n":
-                    break
-                i += 1
-            if not closed:
-                raise ValueError(f"CIF: unterminated quoted string starting at offset {start - 1}")
-            at_line_start = False
-            continue
-
-        start = i
-        while i < n and not _is_whitespace(text[i]):
-            i += 1
-        tok = text[start:i]
-        lower = tok.lower()
-        if lower.startswith("data_") and len(lower) > 5:
-            out.append(_Token(_TK.DATA_HEADER, tok[5:]))
-        elif lower == "loop_":
-            out.append(_Token(_TK.LOOP, ""))
-        elif lower == "save_":
-            out.append(_Token(_TK.SAVE_CLOSE, ""))
-        elif lower.startswith("save_"):
-            out.append(_Token(_TK.SAVE_OPEN, tok[5:]))
-        elif lower in ("global_", "stop_"):
-            pass
-        elif tok.startswith("_"):
-            out.append(_Token(_TK.TAG, lower))
-        else:
-            out.append(_Token(_TK.VALUE, tok))
-        at_line_start = False
-    return out
-
-
-def _build_blocks(tokens: list[_Token]) -> list[_CIFBlock]:
-    blocks: list[_CIFBlock] = []
-    block: _CIFBlock | None = None
-    in_save_frame = False
-    i = 0
-    n = len(tokens)
-    while i < n:
-        t = tokens[i]
-        if t.kind == _TK.DATA_HEADER:
-            block = _CIFBlock(name=t.text, tags={}, loops=[])
-            blocks.append(block)
-            in_save_frame = False
-            i += 1
-            continue
-        if t.kind == _TK.SAVE_OPEN:
-            in_save_frame = True
-            i += 1
-            continue
-        if t.kind == _TK.SAVE_CLOSE:
-            in_save_frame = False
-            i += 1
-            continue
-        if block is None or in_save_frame:
-            i += 1
-            continue
-        if t.kind == _TK.TAG:
-            tag = t.text
-            i += 1
-            if i >= n or tokens[i].kind != _TK.VALUE:
-                raise ValueError(f"CIF: tag {tag} has no value")
-            block.tags[tag] = tokens[i].text
-            i += 1
-            continue
-        if t.kind == _TK.LOOP:
-            i += 1
-            loop_tags: list[str] = []
-            while i < n and tokens[i].kind == _TK.TAG:
-                loop_tags.append(tokens[i].text)
-                i += 1
-            if not loop_tags:
-                raise ValueError("CIF: loop_ has no tags")
-            flat_values: list[str] = []
-            while i < n and tokens[i].kind == _TK.VALUE:
-                flat_values.append(tokens[i].text)
-                i += 1
-            stride = len(loop_tags)
-            full_rows = len(flat_values) // stride
-            rows = [
-                flat_values[r * stride : (r + 1) * stride] for r in range(full_rows)
-            ]
-            block.loops.append(_CIFLoop(tags=loop_tags, rows=rows))
-            continue
-        i += 1
-    return blocks
-
-
-def _parse_file(text: str) -> _CIFBlock:
-    blocks = _build_blocks(_tokenize_cif(text))
-    if not blocks:
-        raise ValueError("CIF has no data_ block")
-    return blocks[0]
-
-
 def _is_missing(raw: str | None) -> bool:
-    return raw is None or raw in ("?", ".")
+    return raw is None or str(raw).strip() in ("?", ".", "")
 
 
 def _strip_uncertainty(s: str) -> str:
-    return re.sub(r"\(\d+\)$", "", s)
+    return re.sub(r"\(\d+\)$", "", s.strip())
 
 
-def _number_value(raw: str | None, label: str) -> float:
-    if _is_missing(raw):
-        raise ValueError(f"CIF is missing {label}")
-    cleaned = _strip_uncertainty(raw.strip())
-    value = float(cleaned)
-    if not np_isfinite(value):
-        raise ValueError(f"CIF {label} is not numeric ({raw})")
-    return value
+def _as_float(raw: str | float | int | None) -> float:
+    if raw is None:
+        raise ValueError("CIF value is missing")
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    cleaned = _strip_uncertainty(str(raw))
+    if _is_missing(cleaned):
+        raise ValueError("CIF value is missing")
+    return float(cleaned)
 
 
-def _number_value_or(raw: str | None, fallback: float) -> float:
-    if _is_missing(raw):
+def _as_float_or(raw: str | float | int | None, fallback: float) -> float:
+    if raw is None or _is_missing(str(raw)):
         return fallback
-    cleaned = _strip_uncertainty(raw.strip())
     try:
-        value = float(cleaned)
+        return _as_float(raw)
     except ValueError:
         return fallback
-    return value if np_isfinite(value) else fallback
 
 
-def np_isfinite(x: float) -> bool:
-    import math
-    return math.isfinite(x)
+def _first_tag(block, *names: str) -> str | None:
+    for name in names:
+        if name in block:
+            return block[name]
+    return None
+
+
+def _loop_rows(block, *tags: str) -> list[dict[str, str]] | None:
+    if not tags or tags[0] not in block:
+        return None
+    n_rows = len(block[tags[0]])
+    rows: list[dict[str, str]] = []
+    for i in range(n_rows):
+        rows.append({tag: block[tag][i] for tag in tags if tag in block})
+    return rows
+
+
+def _read_block(text: str):
+    cif = ReadCif(StringIO(text))
+    if not cif.keys():
+        raise ValueError("CIF has no data_ block")
+    return cif[list(cif.keys())[0]]
 
 
 def _clean_symbol(raw: str) -> str:
@@ -297,119 +144,78 @@ def _clean_symbol(raw: str) -> str:
     return one_letter
 
 
-def _cell_tags_from_block(block: _CIFBlock) -> CIFCellParameters:
-    def tag(*names: str) -> str | None:
-        for name in names:
-            if name in block.tags:
-                return block.tags[name]
-        return None
-
-    sg_raw = tag(
-        "_space_group_it_number",
-        "_symmetry_int_tables_number",
-        "_space_group.it_number",
-    )
-    hm_raw = tag(
-        "_space_group_name_h-m_alt",
-        "_space_group.name_h-m_alt",
-        "_symmetry_space_group_name_h-m",
-        "_space_group_name_h-m",
-    )
+def _cell_from_block(block) -> CIFCellParameters:
+    sg_raw = _first_tag(block, *_SG_NUMBER_TAGS)
+    hm_raw = _first_tag(block, *_HM_SYMBOL_TAGS)
     return CIFCellParameters(
-        a=_number_value(tag("_cell_length_a"), "_cell_length_a"),
-        b=_number_value(tag("_cell_length_b"), "_cell_length_b"),
-        c=_number_value(tag("_cell_length_c"), "_cell_length_c"),
-        alpha=_number_value(tag("_cell_angle_alpha"), "_cell_angle_alpha"),
-        beta=_number_value(tag("_cell_angle_beta"), "_cell_angle_beta"),
-        gamma=_number_value(tag("_cell_angle_gamma"), "_cell_angle_gamma"),
-        space_group=None if _is_missing(sg_raw) else int(_number_value(sg_raw, "space group number")),
-        hm_symbol=None if _is_missing(hm_raw) else hm_raw.strip(),
+        a=_as_float(_first_tag(block, _CELL_LENGTH_TAGS[0])),
+        b=_as_float(_first_tag(block, _CELL_LENGTH_TAGS[1])),
+        c=_as_float(_first_tag(block, _CELL_LENGTH_TAGS[2])),
+        alpha=_as_float(_first_tag(block, _CELL_ANGLE_TAGS[0])),
+        beta=_as_float(_first_tag(block, _CELL_ANGLE_TAGS[1])),
+        gamma=_as_float(_first_tag(block, _CELL_ANGLE_TAGS[2])),
+        space_group=None if _is_missing(sg_raw) else int(_as_float(sg_raw)),
+        hm_symbol=None if _is_missing(hm_raw) else str(hm_raw).strip().strip("'\""),
     )
 
 
 def parse_cif_cell_parameters(text: str) -> CIFCellParameters:
-    return _cell_tags_from_block(_parse_file(text))
+    return _cell_from_block(_read_block(text))
 
 
 def parse_cif_crystal(text: str) -> CIFCrystal:
-    block = _parse_file(text)
-    cell = _cell_tags_from_block(block)
+    block = _read_block(text)
+    cell = _cell_from_block(block)
 
-    atom_loop = next(
-        (
-            loop
-            for loop in block.loops
-            if any(t.startswith("_atom_site_") and t != "_atom_site_aniso_label" for t in loop.tags)
-        ),
-        None,
+    site_rows = _loop_rows(
+        block,
+        "_atom_site_fract_x",
+        "_atom_site_fract_y",
+        "_atom_site_fract_z",
+        "_atom_site_label",
+        "_atom_site_type_symbol",
+        "_atom_site_occupancy",
+        "_atom_site_b_iso_or_equiv",
+        "_atom_site_u_iso_or_equiv",
     )
-    site_loop = next(
-        (
-            loop
-            for loop in block.loops
-            if "_atom_site_fract_x" in loop.tags
-            and "_atom_site_fract_y" in loop.tags
-            and "_atom_site_fract_z" in loop.tags
-        ),
-        atom_loop,
-    )
-    if site_loop is None:
+    if site_rows is None:
         raise ValueError("CIF is missing an atom_site loop with fractional coordinates")
 
-    def idx(*names: str) -> int:
-        for name in names:
-            if name in site_loop.tags:
-                return site_loop.tags.index(name)
-        return -1
-
-    label_idx = idx("_atom_site_label")
-    symbol_idx = idx("_atom_site_type_symbol")
-    x_idx = idx("_atom_site_fract_x")
-    y_idx = idx("_atom_site_fract_y")
-    z_idx = idx("_atom_site_fract_z")
-    occ_idx = idx("_atom_site_occupancy")
-    b_idx = idx("_atom_site_b_iso_or_equiv")
-    u_idx = idx("_atom_site_u_iso_or_equiv")
-    if x_idx < 0 or y_idx < 0 or z_idx < 0:
-        raise ValueError("CIF atom_site loop must include fract_x/fract_y/fract_z")
-
     atom_sites: list[CIFAtomSite] = []
-    import math
-
-    for i, row in enumerate(site_loop.rows):
-        label_raw = row[label_idx] if label_idx >= 0 else f"site{i}"
-        symbol_raw = row[symbol_idx] if symbol_idx >= 0 and not _is_missing(row[symbol_idx]) else label_raw
-        symbol = _clean_symbol(symbol_raw)
-        if b_idx >= 0 and not _is_missing(row[b_idx]):
-            b_iso = _number_value(row[b_idx], "_atom_site_b_iso_or_equiv")
-        elif u_idx >= 0 and not _is_missing(row[u_idx]):
-            b_iso = _number_value(row[u_idx], "_atom_site_u_iso_or_equiv") * 8 * math.pi * math.pi
+    for i, row in enumerate(site_rows):
+        label_raw = row.get("_atom_site_label", f"site{i}")
+        symbol_raw = row.get("_atom_site_type_symbol", label_raw)
+        if _is_missing(symbol_raw):
+            symbol_raw = label_raw
+        symbol = _clean_symbol(str(symbol_raw))
+        b_raw = row.get("_atom_site_b_iso_or_equiv")
+        u_raw = row.get("_atom_site_u_iso_or_equiv")
+        if not _is_missing(b_raw):
+            b_iso = _as_float(b_raw)
+        elif not _is_missing(u_raw):
+            b_iso = _as_float(u_raw) * 8 * math.pi * math.pi
         else:
             b_iso = DEFAULT_B_ISO_ANGSTROM_SQ
         atom_sites.append(
             CIFAtomSite(
-                label=label_raw,
+                label=str(label_raw),
                 symbol=symbol,
                 atomic_number=ATOMIC_NUMBERS[symbol],
                 fract=(
-                    _number_value(row[x_idx], "_atom_site_fract_x"),
-                    _number_value(row[y_idx], "_atom_site_fract_y"),
-                    _number_value(row[z_idx], "_atom_site_fract_z"),
+                    _as_float(row["_atom_site_fract_x"]),
+                    _as_float(row["_atom_site_fract_y"]),
+                    _as_float(row["_atom_site_fract_z"]),
                 ),
-                occupancy=_number_value_or(row[occ_idx], 1.0) if occ_idx >= 0 else 1.0,
+                occupancy=_as_float_or(row.get("_atom_site_occupancy"), 1.0),
                 b_iso=b_iso,
             )
         )
 
-    symop_tags = [
-        "_space_group_symop_operation_xyz",
-        "_symmetry_equiv_pos_as_xyz",
-    ]
-    sym_loop = next((loop for loop in block.loops if any(t in symop_tags for t in loop.tags)), None)
     sym_ops = ["x,y,z"]
-    if sym_loop is not None:
-        sym_idx = next(i for i, t in enumerate(sym_loop.tags) if t in symop_tags)
-        sym_ops = [row[sym_idx] for row in sym_loop.rows]
+    for tag in _SYMOP_TAGS:
+        if tag in block:
+            sym_ops = [str(op).strip().strip("'\"") for op in block[tag]]
+            break
 
     return CIFCrystal(
         a=cell.a,

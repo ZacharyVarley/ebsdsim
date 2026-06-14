@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-06-14
+
+### Changed
+
+- CIF parsing now uses [PyCifRW](https://pypi.org/project/PyCifRW/) instead of a
+  custom tokenizer/parser.
+
+### Fixed
+
+- On macOS/Linux, diff-lookup multiprocessing uses the `fork` start method so
+  `LookupPrefetcher` and parallel lookup builds work from plain scripts (fixes
+  spawn re-import of `__main__`). Thanks to
+  [Håkon Wiik Ånes](https://github.com/hakonanes) ([#2](https://github.com/ZacharyVarley/ebsdsim/pull/2)).
+
 ## [0.1.3] - 2026-06-08
 
 ### Changed

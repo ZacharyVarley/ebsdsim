@@ -36,6 +36,7 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.21",
+  "PyCifRW>=5.0",
   "wgpu>=0.29",
 ]
 
