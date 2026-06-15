@@ -62,6 +62,9 @@ Override per site when you have better data:
 es.Atom("Ga", x=1/3, y=2/3, z=0.0, b_iso=0.45)  # Å²
 ```
 
+CIFs with `_atom_site_B_iso_or_equiv` or `_atom_site_U_iso_or_equiv` use those values
+directly.
+
 In the future, defaults should come from the CIF when present (e.g. values refined
 against neutron diffraction), from DFT, or from modern surrogates that predict
 site-resolved thermal parameters reliably. Until then, treat the default as a
@@ -74,19 +77,15 @@ placeholder and set `b_iso` explicitly when it matters for your comparison.
 | | |
 | --- | --- |
 | Python | 3.10 – 3.13 |
-| Runtime deps | NumPy, [wgpu](https://pypi.org/project/wgpu/) ≥ 0.29 |
-| GPU | WebGPU-capable adapter (see platforms below) |
+| Runtime | NumPy ≥ 1.21, [PyCifRW](https://pypi.org/project/PyCifRW/) ≥ 5.0, [wgpu](https://pypi.org/project/wgpu/) ≥ 0.29 |
+| GPU | WebGPU adapter to run simulations |
 
-### Supported platforms
+CIF files are read with **PyCifRW** (Hermann–Mauguin symbols and mixed-case tags are
+accepted). GPU setup — drivers, headless Linux, cloud VMs — is handled by
+[wgpu-py](https://wgpu-py.readthedocs.io/en/stable/start.html#install-with-pip); see
+also [platform requirements](https://wgpu-py.readthedocs.io/en/stable/start.html#platform-requirements).
 
-| OS | Backend | Notes |
-| --- | --- | --- |
-| **macOS** | Metal | |
-| **Windows** | Vulkan or DirectX 12 | Requires recent GPU drivers. |
-| **Linux** | Vulkan | Install Mesa/Vulkan drivers for your GPU. |
-
-Simulation requires a working WebGPU adapter. Headless servers without GPU passthrough
-will not be able to run `master_pattern*`.
+Loading saved `.npz` files via `mploader` needs only NumPy.
 
 ---
 
@@ -96,7 +95,7 @@ will not be able to run `master_pattern*`.
 pip install ebsdsim
 ```
 
-From source (editable), with dev and notebook extras:
+From source (editable), with dev and docs extras:
 
 ```bash
 git clone https://github.com/ZacharyVarley/ebsdsim.git
@@ -104,7 +103,8 @@ cd ebsdsim
 pip install -e ".[dev,docs]"
 ```
 
----
+If `import ebsdsim` works but simulation fails with a GPU error, follow the
+[wgpu-py installation guide](https://wgpu-py.readthedocs.io/en/stable/start.html#install-with-pip).
 
 ## Quick start
 
@@ -198,10 +198,8 @@ patterns:
 | `dmin` | `0.05` nm | Minimum d-spacing — sets the reflection sphere (smaller → more beams, slower) |
 | `halfw` | `250` | Lambert half-width; pattern size is `(1 + 2×halfw) × (1 + 2×halfw)` |
 
-`mp.pattern`, `mp.data`, and `mp.integrated` are always **raw dynamical
-intensities**. For display scaling, call `mp.lambert_data(normalize="minmax")`
-or `mp.lambert_data(normalize="robust", robust_p_low=0.01, robust_p_high=0.99)`.
-Scaling is never baked into the simulation result.
+Display scaling: `mp.lambert_data(normalize="minmax")` or
+`normalize="robust"` (optional `robust_p_low` / `robust_p_high`).
 
 ---
 
@@ -227,7 +225,7 @@ save_png_gray(to_uint8(nh), "GaN_integrated_nh.png")
 | `fundamental_sector` | Raw symmetry-reduced intensities `(E, S, n_k)` |
 | `fundamental_kij`, `fundamental_khat` | Lambert indices and unit directions per FS pixel |
 | `pg_operators`, `fs_normals` | Point-group matrices and sector bounding normals |
-| `bin_voltages_kv`, `bin_weights` | Per-bin beam voltage and energy weight |
+| `bin_voltages_kv`, `bin_weights` | Upper edge (kV) and MC weight of each energy-loss bin |
 | `site_weights` | Normalized occupancy × multiplicity weights for the site marginal |
 | `meta_json` | UTF-8 JSON simulation metadata (includes beam, MC, and dynamical settings) |
 
@@ -240,11 +238,13 @@ walkthrough.
 
 | Resource | Description |
 | --- | --- |
+| [Documentation](https://ebsdsim.readthedocs.io/) | API reference and quick start |
 | [`examples/01_quick_start.ipynb`](examples/01_quick_start.ipynb) | GaN and Ni patterns |
 | [`examples/02_save_and_load.ipynb`](examples/02_save_and_load.ipynb) | Save, reload, export PNGs |
 | [`scripts/run_gan_example.py`](scripts/run_gan_example.py) | Full-resolution GaN script |
 
-Preset CIFs ship under `ebsdsim/data/preset_cifs/` (Ni, GaN).
+Preset CIFs: `Ni.cif`, `GaN.cif` under `ebsdsim/data/preset_cifs/`. Hermann–Mauguin
+symbols without an IT number (e.g. `F m 3 m`) are resolved automatically.
 
 ---
 
