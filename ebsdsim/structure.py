@@ -148,17 +148,24 @@ def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
         0, 0, volume / (a * b * sg),
     ], dtype=np.float64)
 
+    space_group = crystal.space_group
+    if not isinstance(space_group, int) or not (1 <= space_group <= 230):
+        if crystal.hm_symbol:
+            from ebsdsim.material import resolve_space_group
+
+            space_group, _ = resolve_space_group(crystal.hm_symbol)
+
     atom_types = np.array([site.atomic_number for site in crystal.atom_sites], dtype=np.int32)
     atom_data = np.zeros((len(crystal.atom_sites), 5), dtype=np.float64)
     positions: list[list[Vec3]] = []
-    use_sg_ops = isinstance(crystal.space_group, int) and 1 <= crystal.space_group <= 230
+    use_sg_ops = isinstance(space_group, int) and 1 <= space_group <= 230
 
     for i, site in enumerate(crystal.atom_sites):
         atom_data[i, 0:3] = site.fract
         atom_data[i, 3] = site.occupancy
         atom_data[i, 4] = site.b_iso * _ANGSTROM_SQ_TO_NM_SQ
         if use_sg_ops:
-            orbit = expand_sg_orbit(crystal.space_group, site.fract)
+            orbit = expand_sg_orbit(space_group, site.fract)
         else:
             ops = crystal.sym_ops if crystal.sym_ops else ["x,y,z"]
             orbit = _unique_positions([_apply_sym_op(op, site.fract) for op in ops])
@@ -184,8 +191,8 @@ def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
     density = a_mass_sum / (volume * 6.02214076e2)
 
     pg_num = (
-        pg_from_sg(crystal.space_group)
-        if isinstance(crystal.space_group, int) and 1 <= crystal.space_group <= 230
+        pg_from_sg(space_group)
+        if isinstance(space_group, int) and 1 <= space_group <= 230
         else None
     )
 
@@ -203,12 +210,12 @@ def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
         atom_data=atom_data,
         positions=positions,
         multiplicities=multiplicities,
-        space_group=crystal.space_group,
+        space_group=space_group,
         pg_num=pg_num,
         density=density,
         average_atomic_number=average_atomic_number,
         average_atomic_weight=average_atomic_weight,
-        lattice_centering=infer_centering(crystal.hm_symbol, crystal.space_group),
+        lattice_centering=infer_centering(crystal.hm_symbol, space_group),
     )
 
 

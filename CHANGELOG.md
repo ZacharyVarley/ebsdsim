@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-06-15
+
+### Added
+
+- Sphinx API documentation (`docs/`), Read the Docs config (`.readthedocs.yaml`),
+  and a CI docs build job. Hosted at [ebsdsim.readthedocs.io](https://ebsdsim.readthedocs.io/).
+- NumPy-style docstrings on the public API.
+- `Fe_gamma.cif` regression fixture (high-temperature γ-Fe, spaced `F m 3 m` symbol).
+
+### Fixed
+
+- CIF tag lookup is case-insensitive (e.g. `_symmetry_space_group_name_H-M`).
+- Hermann–Mauguin symbols without an IT number (e.g. `F m 3 m`) resolve to the
+  correct space group and point group when building a cell from CIF.
+- Energy-bin labels in saved master patterns use the **upper edge** of each bin
+  (20 kV for the 20–19 kV bin at 1 keV width), not the bin centre.
+
 ## [0.1.5] - 2026-06-14
 
 ### Fixed

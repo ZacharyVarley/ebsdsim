@@ -51,3 +51,18 @@ def test_diff_lookup_finite():
     lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=20.0, dmin=0.05))
     assert lookup.hkl.size > 0
     assert np.isfinite(lookup.mlambda)
+
+
+def _fe_gamma_cif_text() -> str:
+    path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Fe_gamma.cif")
+    return path.read_text(encoding="utf-8")
+
+
+def test_fe_gamma_cif_hm_tag_case_and_symbol():
+    """Regression: capitalized H-M tag and spaced Hermann–Mauguin symbol (issue #3)."""
+    crystal = parse_cif_crystal(_fe_gamma_cif_text())
+    assert crystal.hm_symbol == "F m 3 m"
+    assert crystal.space_group is None
+    cell = build_cell_from_cif(crystal)
+    assert cell.space_group == 225
+    assert cell.pg_num == 32

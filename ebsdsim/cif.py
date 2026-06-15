@@ -106,20 +106,33 @@ def _as_float_or(raw: str | float | int | None, fallback: float) -> float:
         return fallback
 
 
+def _keys_lower(block) -> dict[str, str]:
+    return {k.lower(): k for k in block.keys()}
+
+
 def _first_tag(block, *names: str) -> str | None:
+    lower_map = _keys_lower(block)
     for name in names:
-        if name in block:
-            return block[name]
+        key = lower_map.get(name.lower())
+        if key is not None:
+            return block[key]
     return None
 
 
 def _loop_rows(block, *tags: str) -> list[dict[str, str]] | None:
-    if not tags or tags[0] not in block:
+    if not tags:
         return None
-    n_rows = len(block[tags[0]])
+    lower_map = _keys_lower(block)
+    first_key = lower_map.get(tags[0].lower())
+    if first_key is None:
+        return None
+    resolved = [lower_map.get(tag.lower()) for tag in tags]
+    n_rows = len(block[first_key])
     rows: list[dict[str, str]] = []
     for i in range(n_rows):
-        rows.append({tag: block[tag][i] for tag in tags if tag in block})
+        rows.append(
+            {tags[j]: block[resolved[j]][i] for j in range(len(tags)) if resolved[j] is not None}
+        )
     return rows
 
 
@@ -212,9 +225,11 @@ def parse_cif_crystal(text: str) -> CIFCrystal:
         )
 
     sym_ops = ["x,y,z"]
+    lower_map = _keys_lower(block)
     for tag in _SYMOP_TAGS:
-        if tag in block:
-            sym_ops = [str(op).strip().strip("'\"") for op in block[tag]]
+        key = lower_map.get(tag.lower())
+        if key is not None:
+            sym_ops = [str(op).strip().strip("'\"") for op in block[key]]
             break
 
     return CIFCrystal(

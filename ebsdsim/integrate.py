@@ -81,7 +81,7 @@ def surrogate_to_multi_voltage_mc(de: SurrogateDirectExp, beam_kv: float) -> Mul
         d_e = float(centers[0]) * 2.0
     else:
         d_e = 1.0
-    voltages = np.array([beam_kv - (i + 0.5) * d_e for i in range(n)], dtype=np.float64)
+    voltages = np.array([beam_kv - i * d_e for i in range(n)], dtype=np.float64)
     return MultiVoltageMC(
         binsize_energy_keV=d_e,
         voltages_kv=voltages,

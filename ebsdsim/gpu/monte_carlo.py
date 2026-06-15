@@ -375,9 +375,7 @@ def run_monte_carlo_gpu(
     amplitudes, betas, energy_weights = _fit_mc_histogram(raw_hist, eparams)
 
     n_energy_bins = int(energy_weights.shape[0])
-    voltages_kv = voltage_kv - (
-        np.arange(n_energy_bins, dtype=np.float64) + 0.5
-    ) * energy_binwidth_kev
+    voltages_kv = voltage_kv - np.arange(n_energy_bins, dtype=np.float64) * energy_binwidth_kev
 
     return MultiVoltageMC(
         binsize_energy_keV=float(energy_binwidth_kev),

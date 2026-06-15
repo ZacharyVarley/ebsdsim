@@ -12,9 +12,13 @@ _DEFAULT_B_ISO_ANGSTROM_SQ = 0.5
 # Common Hermann–Mauguin symbols → IT number (normalized: no spaces, lower case).
 _HM_TO_SG: dict[str, int] = {
     "fm-3m": 225,
+    "fm3m": 225,
     "fd-3m": 227,
+    "fd3m": 227,
     "im-3m": 229,
+    "im3m": 229,
     "pm-3m": 221,
+    "pm3m": 221,
     "p63/mmc": 194,
     "p6_3/mmc": 194,
     "p63mmc": 194,

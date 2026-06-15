@@ -46,5 +46,7 @@ def test_surrogate_to_multi_voltage_mc_voltage_axis():
     )
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
     assert mc.voltages_kv.size == 20
+    assert mc.voltages_kv[0] == 20.0
+    assert mc.voltages_kv[1] == 19.0
     assert mc.voltages_kv[0] > mc.voltages_kv[-1]
     assert np.isclose(mc.energy_weights.sum(), 1.0)
