@@ -27,10 +27,66 @@ from ebsdsim.structure import build_cell_from_cif
 from ebsdsim.normalize import NormalizeMode
 from ebsdsim.types import MasterPatternMode
 
+_SIM_KWARGS_DOC = """
+voltage_kv : float, optional
+    Beam energy in kV. Default ``20.0``.
+halfw : int, optional
+    Lambert half-width; raster side is ``1 + 2 * halfw``. Default ``250``
+    (501×501 pixels).
+dmin : float, optional
+    Minimum interplanar spacing in nm; reflections with ``d < dmin`` are
+    excluded. Default ``0.05``.
+energy_binwidth_keV : float, optional
+    Width of Monte Carlo energy-loss bins in keV. Default ``1.0``.
+n_trajectories : int, optional
+    Monte Carlo trajectories per bin when ``mc_auto_stop=False``. Default
+    ``1_048_576``.
+sigma_deg : float, optional
+    Specimen tilt from normal (degrees). Default ``70.0``.
+omega_deg : float, optional
+    Azimuthal specimen rotation (degrees). Default ``0.0``.
+rank : int, optional
+    Smith / Lyapunov iteration rank for the dynamical solve. Default ``20``.
+chunk_size : int, optional
+    GPU batch size for the multi-beam solve. Default ``256``.
+marginal_coverage : float, optional
+    Fraction of the Monte Carlo energy distribution to integrate over
+    (``0 < value <= 1``). Default ``1.0``.
+relative_image_stop : float, optional
+    Stop energy-bin integration when the integrated image changes by less
+    than this relative amount. Default ``0.01``.
+mc_backend : {"surrogate", "gpu"}, optional
+    ``"surrogate"`` (default) uses a fast precomputed depth–energy model;
+    ``"gpu"`` runs full GPU Monte Carlo with automatic stopping.
+bethe_c_strong, bethe_c_weak, bethe_c_cutoff : float, optional
+    Bethe perturbation cutoffs for strong, weak, and cutoff beams.
+dbdiff_sg_cutoff : float, optional
+    Structure-factor threshold for including a reflection in the system.
+mc_auto_stop : bool, optional
+    When ``True`` (default), adapt Monte Carlo trajectory count per bin.
+mc_relative_tol : float, optional
+    Relative tolerance for Monte Carlo convergence. Default ``0.01``.
+mc_min_trajectories, mc_max_trajectories : int, optional
+    Bounds on adaptive Monte Carlo trajectory count.
+"""
+
 
 @dataclass(frozen=True)
 class Atom:
-    """Crystallographic site in fractional coordinates (direct lattice)."""
+    """Crystallographic site in fractional coordinates (direct lattice).
+
+    Parameters
+    ----------
+    element : str
+        Chemical symbol (e.g. ``"Ni"``, ``"Ga"``).
+    x, y, z : float
+        Fractional coordinates in the direct unit cell.
+    occupancy : float, optional
+        Site occupancy in ``[0, 1]``. Default ``1.0``.
+    b_iso : float or None, optional
+        Isotropic Debye–Waller factor in Å². When ``None``, a room-temperature
+        default is used during structure-factor evaluation.
+    """
 
     element: str
     x: float
@@ -42,7 +98,18 @@ class Atom:
 
 @dataclass(frozen=True)
 class Cell:
-    """Unit-cell lattice parameters (Å and degrees)."""
+    """Unit-cell lattice parameters (Å and degrees).
+
+    Parameters
+    ----------
+    a, b, c : float
+        Lattice lengths in ångströms.
+    alpha, beta, gamma : float, optional
+        Interaxial angles in degrees. Default ``90.0`` each.
+    space_group : int or str, optional
+        International Tables space-group number or Hermann–Mauguin symbol.
+        Default ``1`` (triclinic ``P1``).
+    """
 
     a: float
     b: float
@@ -55,13 +122,31 @@ class Cell:
 
 @dataclass
 class Material:
-    """Crystal specification for master-pattern simulation."""
+    """Crystal specification for master-pattern simulation.
+
+    Parameters
+    ----------
+    cell : Cell
+        Unit-cell geometry and space group.
+    atoms : list of Atom
+        Atomic sites in fractional coordinates.
+    name : str, optional
+        Human-readable label stored in output metadata. Default ``""``.
+    """
 
     cell: Cell
     atoms: list[Atom]
     name: str = ""
 
     def to_simulation_cell(self):
+        """Build the internal simulation cell used by the GPU pipeline.
+
+        Returns
+        -------
+        Cell
+            Crystallographic cell with resolved point-group number and
+            symmetry-expanded sites.
+        """
         return build_cell_from_material(
             a=self.cell.a,
             b=self.cell.b,
@@ -78,28 +163,14 @@ class Material:
 class MasterPattern:
     """Rasterized master pattern and integration metadata.
 
-    Attributes
-    ----------
-    pattern:
-        North-hemisphere Lambert raster ``(side, side)`` with
-        ``side = 1 + 2 * halfw``. Equal to ``data[energy_int, site_int, 0]``.
-        Always raw dynamical intensities; use :meth:`lambert_data` for display
-        scaling.
-    data:
-        Dense Lambert tensor ``(E, S, H, side, side)`` of **raw** intensities.
-        ``E`` is ``1 + n_energy_bins`` (index 0 integrated) when there is more
-        than one bin, else ``1``; ``S`` is ``1 + n_sites`` (index 0
-        site-integrated) when there is more than one site, else ``1``; ``H`` is
-        ``2`` when the southern hemisphere is needed, else ``1``. See ``axes``.
-    integrated:
-        Energy-integrated fundamental-sector intensities (raw, un-normalized),
-        flattened ``(n_k * n_sites,)`` in row-major ``(direction, site)`` order.
-    bin_patterns:
-        Per-energy-bin fundamental-sector intensities (the intermediates),
-        each flattened ``(n_k * n_sites,)``. Stored unweighted.
-    kij / khat:
-        Fundamental-sector pixel indices ``(n_k, 3)`` as ``(i, j, sign)`` and
-        unit directions ``(n_k, 3)``.
+    :attr:`pattern` is the north-hemisphere Lambert raster ``(side, side)`` with
+    ``side = 1 + 2 * halfw``, equal to ``data[energy_int, site_int, 0]``. It
+    holds raw dynamical intensities; use :meth:`lambert_data` for display scaling.
+
+    :attr:`data` is the dense Lambert tensor ``(E, S, H, side, side)`` of raw
+    intensities. :attr:`integrated` and :attr:`bin_patterns` store
+    fundamental-sector values (flattened ``(n_k * n_sites,)``). :attr:`kij` and
+    :attr:`khat` give fundamental-sector pixel indices and unit directions.
     """
 
     pattern: NDArray[np.float32]
@@ -134,8 +205,19 @@ class MasterPattern:
     ) -> tuple[NDArray[np.float32], dict[str, Any]]:
         """Expand raw FS intensities to Lambert ``(E, S, H, side, side)``.
 
-        ``normalize`` is ``None`` (raw), ``"minmax"``, or ``"robust"``. Scaling
-        is applied on demand only; :attr:`data` and :attr:`pattern` stay raw.
+        Parameters
+        ----------
+        normalize : {"minmax", "robust"} or None, optional
+            Display scaling mode. ``None`` returns raw intensities unchanged.
+        robust_p_low, robust_p_high : float, optional
+            Percentile window used when ``normalize="robust"``.
+
+        Returns
+        -------
+        data : ndarray of float32
+            Lambert tensor; see :attr:`data` for axis semantics.
+        axes : dict
+            Index maps for energy, site, and hemisphere axes.
         """
         if normalize is None:
             return self.data, self.axes
@@ -211,7 +293,22 @@ def master_pattern(
     mc_min_trajectories: int = 1_048_576,
     mc_max_trajectories: int = 16_777_216,
 ) -> MasterPattern:
-    """Generate an EBSD master pattern from a manual material specification."""
+    f"""Generate an EBSD master pattern from a manual material specification.
+
+    Requires a WebGPU-capable GPU. Returns raw dynamical intensities; call
+    :meth:`MasterPattern.lambert_data` for display scaling.
+
+    Parameters
+    ----------
+    material : Material
+        Crystal structure and composition.
+    {_SIM_KWARGS_DOC.strip()}
+
+    Returns
+    -------
+    MasterPattern
+        Lambert-rasterized result with per-bin intermediates and metadata.
+    """
     cell = material.to_simulation_cell()
     if cell.pg_num is None:
         raise ValueError("Could not resolve point group; provide a valid space_group.")
@@ -266,7 +363,31 @@ def master_pattern_from_cif(
     mc_min_trajectories: int = 1_048_576,
     mc_max_trajectories: int = 16_777_216,
 ) -> MasterPattern:
-    """Generate an EBSD master pattern from a CIF file or bundled preset name."""
+    f"""Generate an EBSD master pattern from a CIF file or bundled preset.
+
+    ``path`` may be a filesystem path or a bundled preset name such as
+    ``"GaN.cif"`` or ``"Ni.cif"``. The CIF should include
+    ``_space_group_IT_number`` (or equivalent) so the point group can be
+    resolved.
+
+    Parameters
+    ----------
+    path : str or Path
+        CIF file path or preset stem/name.
+    {_SIM_KWARGS_DOC.strip()}
+
+    Returns
+    -------
+    MasterPattern
+        Lambert-rasterized result with per-bin intermediates and metadata.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``path`` does not resolve to a file or bundled preset.
+    ValueError
+        If the point group cannot be determined from the CIF.
+    """
     cif_path = _resolve_cif_path(path)
     crystal = parse_cif_crystal(cif_path.read_text(encoding="utf-8", errors="replace"))
     cell = build_cell_from_cif(crystal)

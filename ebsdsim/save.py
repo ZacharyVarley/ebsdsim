@@ -162,7 +162,22 @@ def _consolidate_fundamental_sector(
 def save_master_pattern(mp: "MasterPattern", path: str | Path) -> Path:
     """Write a master pattern (with intermediates) to a compressed ``.npz``.
 
-    Returns the resolved output path. The ``.npz`` suffix is added if missing.
+    The file stores symmetry-reduced fundamental-sector intensities plus
+    embedded point-group operators so it can be expanded offline with
+    :mod:`ebsdsim.mploader`.
+
+    Parameters
+    ----------
+    mp : MasterPattern
+        Result from :func:`~ebsdsim.api.master_pattern` or
+        :func:`~ebsdsim.api.master_pattern_from_cif`.
+    path : str or Path
+        Output path; ``.npz`` is appended if missing.
+
+    Returns
+    -------
+    Path
+        Resolved output path.
     """
     out_path = Path(path)
     if out_path.suffix.lower() != ".npz":

@@ -3,6 +3,7 @@
 # ebsdsim
 
 [![CI](https://github.com/ZacharyVarley/ebsdsim/actions/workflows/ci.yml/badge.svg)](https://github.com/ZacharyVarley/ebsdsim/actions/workflows/ci.yml)
+[![Documentation](https://readthedocs.org/projects/ebsdsim/badge/?version=latest)](https://ebsdsim.readthedocs.io/)
 [![Python](https://img.shields.io/pypi/pyversions/ebsdsim)](https://pypi.org/project/ebsdsim/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -254,7 +255,12 @@ pip install -e ".[dev,docs]"
 pytest -m "not slow"          # CPU tests; GPU tests skip if no adapter
 pytest -m slow                # end-to-end GPU runs (needs WebGPU)
 python -m build               # sdist + wheel (requires `build` extra)
+cd docs && make html          # API docs (Sphinx); output in docs/_build/html
 ```
+
+API reference: [ebsdsim.readthedocs.io](https://ebsdsim.readthedocs.io/). Hosted on
+[Read the Docs](https://readthedocs.org/) from `.readthedocs.yaml` (no GPU required
+to build docs).
 
 CI runs CPU tests on Ubuntu (Python 3.11–3.12) and full GPU tests on macOS
 (Metal). See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).

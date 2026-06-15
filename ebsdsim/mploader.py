@@ -437,7 +437,12 @@ def build_master_pattern_data(
 # --------------------------------------------------------------------------- #
 @dataclass
 class LoadedMasterPattern:
-    """A master pattern loaded from a ``.npz`` file, with hemisphere expansion."""
+    """Master pattern loaded from a ``.npz`` file.
+
+    :attr:`meta` holds simulation metadata. :attr:`integrated_fs` and
+    :attr:`bin_fs` are fundamental-sector intensities; :attr:`data` is the
+    expanded Lambert tensor of raw values. See :attr:`axes` for index maps.
+    """
 
     meta: dict[str, Any]
     integrated_fs: NDArray[np.float32]  # (n_k, n_sites)
@@ -629,10 +634,18 @@ def _deconsolidate_fundamental_sector(
 
 
 def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
-    """Load an ebsdsim master-pattern ``.npz`` written by ``save_master_pattern``.
+    """Load an ebsdsim master-pattern ``.npz``.
 
-    The returned :attr:`LoadedMasterPattern.data` is always raw. Call
-    :meth:`LoadedMasterPattern.lambert_data` for display scaling.
+    Parameters
+    ----------
+    path : str or Path
+        File written by :func:`ebsdsim.save_master_pattern`.
+
+    Returns
+    -------
+    LoadedMasterPattern
+        Raw Lambert data in :attr:`LoadedMasterPattern.data`; call
+        :meth:`LoadedMasterPattern.lambert_data` for display scaling.
     """
     with np.load(Path(path), allow_pickle=False) as data:
         meta_bytes = bytes(np.asarray(data["meta_json"], dtype=np.uint8).tobytes())

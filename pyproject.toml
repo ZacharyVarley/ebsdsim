@@ -42,6 +42,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/ZacharyVarley/ebsdsim"
+Documentation = "https://ebsdsim.readthedocs.io/"
 Repository = "https://github.com/ZacharyVarley/ebsdsim"
 Issues = "https://github.com/ZacharyVarley/ebsdsim/issues"
 Changelog = "https://github.com/ZacharyVarley/ebsdsim/blob/main/CHANGELOG.md"
@@ -52,6 +53,8 @@ dev = [
   "pytest>=7.0",
 ]
 docs = [
+  "sphinx>=7.0",
+  "furo>=2024.0",
   "jupyter>=1.0",
   "matplotlib>=3.5",
 ]

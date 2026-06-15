@@ -1,4 +1,16 @@
-"""GPU-accelerated dynamical EBSD master-pattern simulation."""
+"""GPU-accelerated dynamical EBSD master-pattern simulation.
+
+Public entry points are re-exported from this package for convenience:
+
+* :func:`~ebsdsim.master_pattern` / :func:`~ebsdsim.master_pattern_from_cif`
+  — run a full GPU simulation
+* :class:`~ebsdsim.MasterPattern` — in-memory result with Lambert raster
+* :func:`~ebsdsim.save_master_pattern` / :func:`~ebsdsim.load_master_pattern`
+  — compressed ``.npz`` I/O
+
+See the `documentation <https://ebsdsim.readthedocs.io/>`_ for a quick start
+and full API reference.
+"""
 
 from __future__ import annotations
 
