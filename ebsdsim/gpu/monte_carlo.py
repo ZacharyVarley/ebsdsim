@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 import wgpu
 from wgpu import BufferBindingType, BufferUsage, ShaderStage
 
-from ebsdsim.binning import extra_energy_bin_params, make_batch_sizes, shave_and_renormalize_4d
+from ebsdsim.binning import dynamical_voltages_kv, extra_energy_bin_params, make_batch_sizes, shave_and_renormalize_4d
 from ebsdsim.gpu.buffers import StorageBuffer
 from ebsdsim.gpu.device import require_gpu, sync_device
 from ebsdsim.gpu.pipelines import load_wgsl
@@ -375,7 +375,7 @@ def run_monte_carlo_gpu(
     amplitudes, betas, energy_weights = _fit_mc_histogram(raw_hist, eparams)
 
     n_energy_bins = int(energy_weights.shape[0])
-    voltages_kv = voltage_kv - np.arange(n_energy_bins, dtype=np.float64) * energy_binwidth_kev
+    voltages_kv = dynamical_voltages_kv(voltage_kv, n_energy_bins, energy_binwidth_kev)
 
     return MultiVoltageMC(
         binsize_energy_keV=float(energy_binwidth_kev),

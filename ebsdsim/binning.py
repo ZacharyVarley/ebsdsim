@@ -57,6 +57,18 @@ def reconstruct_histogram_from_exp_tally(
     return raw, rates, stats
 
 
+def dynamical_voltages_kv(
+    beam_kv: float,
+    n_bins: int,
+    binsize_keV: float,
+) -> NDArray[np.float64]:
+    """Dynamical beam voltage for each energy bin (kV).
+
+    Returns ``beam_kv - i * binsize_keV`` for ``i = 0, 1, …, n_bins - 1``.
+    """
+    return beam_kv - np.arange(int(n_bins), dtype=np.float64) * float(binsize_keV)
+
+
 def extra_energy_bin_params(
     voltage_kv: float, binsize_exit_energy: float, extra_energy_kv: float
 ) -> dict[str, Any]:

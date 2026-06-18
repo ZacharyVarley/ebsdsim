@@ -9,6 +9,7 @@ from typing import Callable, Protocol
 import numpy as np
 from numpy.typing import NDArray
 
+from ebsdsim.binning import dynamical_voltages_kv
 from ebsdsim.surrogate import SurrogateDirectExp
 from ebsdsim.types import MasterPatternMode, MasterPatternResult, MultiVoltageMC
 
@@ -73,6 +74,7 @@ def trim_multi_voltage_mc_by_coverage(mc: MultiVoltageMC, coverage: float) -> Mu
 
 
 def surrogate_to_multi_voltage_mc(de: SurrogateDirectExp, beam_kv: float) -> MultiVoltageMC:
+    """Map surrogate depth/energy marginals to a :class:`MultiVoltageMC`."""
     n = de.amplitudes.size
     centers = de.energy_centers_keV
     if centers.size >= 2:
@@ -81,7 +83,7 @@ def surrogate_to_multi_voltage_mc(de: SurrogateDirectExp, beam_kv: float) -> Mul
         d_e = float(centers[0]) * 2.0
     else:
         d_e = 1.0
-    voltages = np.array([beam_kv - i * d_e for i in range(n)], dtype=np.float64)
+    voltages = dynamical_voltages_kv(beam_kv, n, d_e)
     return MultiVoltageMC(
         binsize_energy_keV=d_e,
         voltages_kv=voltages,

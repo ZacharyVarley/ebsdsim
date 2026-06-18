@@ -225,7 +225,7 @@ save_png_gray(to_uint8(nh), "GaN_integrated_nh.png")
 | `fundamental_sector` | Raw symmetry-reduced intensities `(E, S, n_k)` |
 | `fundamental_kij`, `fundamental_khat` | Lambert indices and unit directions per FS pixel |
 | `pg_operators`, `fs_normals` | Point-group matrices and sector bounding normals |
-| `bin_voltages_kv`, `bin_weights` | Upper edge (kV) and MC weight of each energy-loss bin |
+| `bin_voltages_kv`, `bin_weights` | Dynamical voltage (kV) and MC weight per energy bin |
 | `site_weights` | Normalized occupancy × multiplicity weights for the site marginal |
 | `meta_json` | UTF-8 JSON simulation metadata (includes beam, MC, and dynamical settings) |
 

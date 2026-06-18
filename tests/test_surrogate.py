@@ -6,10 +6,11 @@ import importlib.resources
 
 import numpy as np
 
+from ebsdsim.binning import dynamical_voltages_kv
 from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.integrate import surrogate_to_multi_voltage_mc
 from ebsdsim.structure import build_cell_from_cif
-from ebsdsim.surrogate import get_surrogate_model, infer_direct_exp_from_cell_rebinned
+from ebsdsim.surrogate import SurrogateDirectExp, get_surrogate_model, infer_direct_exp_from_cell_rebinned
 
 
 def _ni_cell():
@@ -35,6 +36,11 @@ def test_surrogate_load_and_infer_ni():
     assert np.isclose(out.energy_weights.sum(), 1.0, atol=1e-8)
 
 
+def test_dynamical_voltages_kv():
+    v = dynamical_voltages_kv(20.0, 3, 0.5)
+    assert list(v) == [20.0, 19.5, 19.0]
+
+
 def test_surrogate_to_multi_voltage_mc_voltage_axis():
     cell = _ni_cell()
     direct = infer_direct_exp_from_cell_rebinned(
@@ -50,3 +56,15 @@ def test_surrogate_to_multi_voltage_mc_voltage_axis():
     assert mc.voltages_kv[1] == 19.0
     assert mc.voltages_kv[0] > mc.voltages_kv[-1]
     assert np.isclose(mc.energy_weights.sum(), 1.0)
+
+
+def test_surrogate_to_multi_voltage_mc_voltages_from_bin_width():
+    direct = SurrogateDirectExp(
+        amplitudes=np.ones(3),
+        betas=np.ones(3),
+        energy_mass=np.ones(3),
+        energy_weights=np.ones(3) / 3.0,
+        energy_centers_keV=np.array([0.25, 0.75, 1.25]),
+    )
+    mc = surrogate_to_multi_voltage_mc(direct, 20.0)
+    assert list(mc.voltages_kv) == [20.0, 19.5, 19.0]

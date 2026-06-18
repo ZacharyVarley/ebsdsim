@@ -29,7 +29,7 @@ Arrays written
 ``fs_normals`` : float64 ``(n_normals, 3)``
     Inward normals bounding the fundamental sector.
 ``bin_voltages_kv`` / ``bin_weights`` : float32 ``(n_bins,)``
-    Upper edge (kV) and energy weight of each saved bin.
+    Dynamical voltage (kV) and energy weight of each saved bin.
 ``site_weights`` : float32 ``(n_sites,)``
     Normalized occupancy × multiplicity weights used for the site-integrated
     marginal (index 0 on the site axis). Per-site slices are raw intensities.
