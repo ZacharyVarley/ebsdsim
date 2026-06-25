@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-06-25
+
+### Added
+
+- `exact_slow_cpu` on `master_pattern` / `master_pattern_from_cif`: full-rank CPU
+  Lyapunov via batched `numpy.linalg.eig` (GPU dynamical assembly unchanged).
+- `verbosity` (`0`, `1`, or `2`, default `0`): run banner, per-bin MC
+  weights/timing, and (at level 2) dynamical beam counts and chunk throughput.
+- `ebsdsim.lyapunov_cpu` helpers and unit tests.
+
+### Changed
+
+- Shortened `README.md`; development, releases, and parameter tables moved to
+  `CONTRIBUTING.md` and Sphinx (`docs/installation.rst`, `docs/parameters.rst`).
+
 ## [0.1.7] - 2026-06-15
 
 ### Changed

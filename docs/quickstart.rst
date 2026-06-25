@@ -72,6 +72,9 @@ installing the full GPU stack:
 Further reading
 ---------------
 
+* `Installation <installation.html>`_
+* `Simulation parameters <parameters.html>`_
 * `GitHub repository <https://github.com/ZacharyVarley/ebsdsim>`_
+* `Contributing <https://github.com/ZacharyVarley/ebsdsim/blob/main/CONTRIBUTING.md>`_
 * `Changelog <https://github.com/ZacharyVarley/ebsdsim/blob/main/CHANGELOG.md>`_
 * :doc:`api` — full API reference

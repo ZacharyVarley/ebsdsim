@@ -12,6 +12,14 @@ from numpy.typing import NDArray
 from ebsdsim.gpu.buffers import StorageBuffer, c64_bytes, f32_bytes, u32_bytes
 from ebsdsim.gpu.device import sync_device
 from ebsdsim.gpu.lu import LuKernels
+from ebsdsim.lyapunov_cpu import (
+    assemble_geff_matrix,
+    build_excitation_e0,
+    complex_to_c64_flat,
+    hermitian_sqrt_factor,
+    read_c64_buffer,
+    solve_lyapunov_eig_batched,
+)
 from ebsdsim.gpu.limits import max_compute_workgroups_per_dimension
 from ebsdsim.gpu.pipelines import PipelineCache, load_wgsl, workgroups_1d
 from ebsdsim.prescan import PrescanResult
@@ -621,6 +629,34 @@ class EBSDDynamicalKernels:
     ) -> None:
         self.lu_kernels.lu_solve_complex64_batched(lu, pivots, rhs, out, batch_count, n)
 
+    def run_exact_lyapunov_cpu(
+        self,
+        ws: FixedRankWorkspace,
+        *,
+        batch_count: int,
+        n: int,
+        use_sigma: bool,
+        mu_shift: float = 0.0,
+    ) -> None:
+        """Full-rank Lyapunov solve on CPU via batched ``numpy.linalg.eig``.
+
+        Reads assembled Bethe blocks back from GPU workspace buffers. The default
+        Smith path never touches ``ws.v_aa`` on the host — it stays on-device
+        through ``assemble_geff_q`` and ``run_fixed_smith_loop``.
+        """
+        sync_device(self.device)
+        v_aa = read_c64_buffer(ws.v_aa, batch_count * n * n).reshape(batch_count, n, n)
+        d_a = read_c64_buffer(ws.d_a, batch_count * n).reshape(batch_count, n)
+        sigma = None
+        if use_sigma:
+            sigma = read_c64_buffer(ws.sigma, batch_count * n * n).reshape(batch_count, n, n)
+        idx_a = ws.idx_a.read_as(np.uint32, size=4 * batch_count * n).reshape(batch_count, n)
+        g = assemble_geff_matrix(v_aa, d_a, sigma)
+        e0 = build_excitation_e0(idx_a)
+        x = solve_lyapunov_eig_batched(g, e0, mu_shift=mu_shift)
+        w = hermitian_sqrt_factor(x)
+        ws.w_stack.write(complex_to_c64_flat(w.reshape(batch_count * n * n)))
+
     def run_fixed_smith_loop(
         self,
         ws: FixedRankWorkspace,
@@ -767,6 +803,7 @@ class EBSDDynamicalKernels:
         mu_shift: float = 0.0,
         amplitude: float,
         n_sites: int,
+        exact_slow_cpu: bool = False,
     ) -> None:
         score_kw = dict(
             batch_count=batch_count,
@@ -829,21 +866,32 @@ class EBSDDynamicalKernels:
                 mlambda=mlambda,
             )
             self.build_sigma_with_bethe_gemm(ws, batch_count=batch_count, n_a=n_strong, n_w=n_weak)
-        self.assemble_geff_q(
-            ws,
-            batch_count=batch_count,
-            n=n_strong,
-            use_sigma=n_weak > 0,
-            mu_shift=mu_shift,
-        )
-        self.run_fixed_smith_loop(ws, batch_count=batch_count, n=n_strong, rank=rank)
+        use_sigma = n_weak > 0
+        intensity_rank = n_strong if exact_slow_cpu else rank
+        if exact_slow_cpu:
+            self.run_exact_lyapunov_cpu(
+                ws,
+                batch_count=batch_count,
+                n=n_strong,
+                use_sigma=use_sigma,
+                mu_shift=mu_shift,
+            )
+        else:
+            self.assemble_geff_q(
+                ws,
+                batch_count=batch_count,
+                n=n_strong,
+                use_sigma=use_sigma,
+                mu_shift=mu_shift,
+            )
+            self.run_fixed_smith_loop(ws, batch_count=batch_count, n=n_strong, rank=rank)
         self.hash_diff(ws, persistent.hkl_hash, batch_count=batch_count, n=n_strong, table_size=table_size, offset=offset)
         self.contract_intensity(
             ws,
             persistent.sgh_tables,
             batch_count=batch_count,
             n=n_strong,
-            rank=rank,
+            rank=intensity_rank,
             n_sites=n_sites,
             table_size=table_size,
             amplitude=amplitude,
@@ -877,6 +925,7 @@ class EBSDDynamicalKernels:
         output: StorageBuffer | None = None,
         output_count: int | None = None,
         on_progress: Callable[[int, int], None] | None = None,
+        exact_slow_cpu: bool = False,
     ) -> None:
         metric_buf = metric if isinstance(metric, StorageBuffer) else self.create_metric_buffer(metric)
         owns_metric = not isinstance(metric, StorageBuffer)
@@ -913,6 +962,7 @@ class EBSDDynamicalKernels:
                         mu_shift=mu_shift,
                         amplitude=amplitude,
                         n_sites=n_sites,
+                        exact_slow_cpu=exact_slow_cpu,
                     )
                     if output is not None and chunk.output_indices is not None:
                         output_indices = StorageBuffer(

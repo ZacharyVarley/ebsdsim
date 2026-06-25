@@ -14,10 +14,10 @@ from ebsdsim.gpu.dynamical import (
     EBSDDynamicalKernels,
     FixedRankChunkDescriptor,
     PersistentBuffers,
-    RunChunk,
     _to_u32,
 )
 from ebsdsim.integrate import PerVoltageContext, PerVoltageResult, compute_mu_eff
+from ebsdsim.progress import MasterPatternProgress
 from ebsdsim.kgrid import PgKGrid, chunk_k_vectors, transform_pg_k_grid_to_reciprocal
 from ebsdsim.lookup import (
     BuildLookupOptions,
@@ -157,6 +157,9 @@ class RunOneVoltageDeps:
     chunk_size: int
     rank: int
     dmin: float
+    exact_slow_cpu: bool = False
+    verbosity: int = 0
+    progress: MasterPatternProgress | None = None
     bethe_c_strong: float = 20.0
     bethe_c_weak: float = 40.0
     bethe_c_cutoff: float = 200.0
@@ -246,6 +249,7 @@ def run_one_voltage(ctx: PerVoltageContext, deps: RunOneVoltageDeps) -> PerVolta
     )
     n_strong = max(1, prescan.n_strong)
     n_weak = max(0, prescan.n_weak)
+    intensity_rank = n_strong if deps.exact_slow_cpu else deps.rank
 
     working_chunk = deps.working_chunk_size if deps.working_chunk_size is not None else deps.chunk_size
     effective_chunk = plan_safe_chunk_size(
@@ -254,7 +258,7 @@ def run_one_voltage(ctx: PerVoltageContext, deps: RunOneVoltageDeps) -> PerVolta
         n_g=n_g,
         n_strong=n_strong,
         n_weak=n_weak,
-        rank=deps.rank,
+        rank=intensity_rank,
         n_sites=n_sites,
     )
     if effective_chunk < 1:
@@ -270,9 +274,10 @@ def run_one_voltage(ctx: PerVoltageContext, deps: RunOneVoltageDeps) -> PerVolta
             n_g=n_g,
             n_strong=n_strong,
             n_weak=n_weak,
-            rank=deps.rank,
+            rank=intensity_rank,
             table_size=lookup.table_size,
             n_sites=n_sites,
+            debug=deps.exact_slow_cpu,
         )
     )
     output = StorageBuffer(
@@ -285,34 +290,56 @@ def run_one_voltage(ctx: PerVoltageContext, deps: RunOneVoltageDeps) -> PerVolta
     )
 
     local_idx = np.arange(n_k, dtype=np.uint32)
+    chunks = list(chunk_k_vectors(kvecs, local_idx, effective_chunk))
+    n_chunks = len(chunks)
+    progress = deps.progress
+    if progress is not None and progress.detailed:
+        progress.dynamical_start(
+            voltage_kv=float(ctx.voltage_kv),
+            n_k=n_k,
+            n_chunks=n_chunks,
+            n_strong=n_strong,
+            n_weak=n_weak,
+            n_g=n_g,
+            effective_chunk=effective_chunk,
+        )
+
+    def on_progress(chunks_done: int, rows_done: int) -> None:
+        if progress is not None:
+            progress.on_chunk(chunks_done, rows_done, n_k, n_chunks)
+
+    on_progress_cb = on_progress if progress is not None and progress.detailed else None
     try:
-        for chunk in chunk_k_vectors(kvecs, local_idx, effective_chunk):
-            deps.kernels.run_fixed_rank_chunks(
-                chunks=[RunChunk(kvecs=chunk.kvecs, output_indices=chunk.output_indices)],
-                persistent=persistent,
-                metric=deps.metric,
-                workspace=workspace,
-                batch_count=effective_chunk,
-                n_g=n_g,
-                n_strong=n_strong,
-                n_weak=n_weak,
-                rank=deps.rank,
-                table_size=lookup.table_size,
-                offset=lookup.offset,
-                prefactor=lookup.prefactor,
-                bethe_c_cutoff=deps.bethe_c_cutoff,
-                dbdiff_sg_cutoff=deps.dbdiff_sg_cutoff,
-                bethe_c_strong=deps.bethe_c_strong,
-                bethe_c_weak=deps.bethe_c_weak,
-                diag_imag=lookup.diag_imag,
-                mlambda=lookup.mlambda,
-                mu_shift=mu_eff,
-                amplitude=a,
-                n_sites=n_sites,
-                mode=ctx.mode,
-                output=output,
-                output_count=n_k,
-            )
+        deps.kernels.run_fixed_rank_chunks(
+            chunks=chunks,
+            persistent=persistent,
+            metric=deps.metric,
+            workspace=workspace,
+            batch_count=effective_chunk,
+            n_g=n_g,
+            n_strong=n_strong,
+            n_weak=n_weak,
+            rank=intensity_rank,
+            table_size=lookup.table_size,
+            offset=lookup.offset,
+            prefactor=lookup.prefactor,
+            bethe_c_cutoff=deps.bethe_c_cutoff,
+            dbdiff_sg_cutoff=deps.dbdiff_sg_cutoff,
+            bethe_c_strong=deps.bethe_c_strong,
+            bethe_c_weak=deps.bethe_c_weak,
+            diag_imag=lookup.diag_imag,
+            mlambda=lookup.mlambda,
+            mu_shift=mu_eff,
+            amplitude=a,
+            n_sites=n_sites,
+            mode=ctx.mode,
+            output=output,
+            output_count=n_k,
+            on_progress=on_progress_cb,
+            exact_slow_cpu=deps.exact_slow_cpu,
+        )
+        if progress is not None:
+            progress.dynamical_finished()
         pattern = output.read_as(np.float32)
     finally:
         output.destroy()

@@ -188,7 +188,8 @@ class RunMasterPatternIntegratedOptions:
     mc: MultiVoltageMC
     run_one_voltage: PerVoltageRunner
     mode: MasterPatternMode = "bloch"
-    bin_callback: Callable[[int, int, float], None] | None = None
+    bin_callback: Callable[[int, int, float, float, float], None] | None = None
+    on_bin_complete: Callable[[int, int, float], None] | None = None
     on_bin_integrated: Callable[[NDArray[np.float32], int, int], None] | None = None
     min_weight: float = 1e-12
     min_amplitude: float = 1e-12
@@ -235,7 +236,7 @@ def run_master_pattern_voltage_integrated(
         beta = float(mc.betas[v])
         vkv = float(mc.voltages_kv[v])
         if opts.bin_callback:
-            opts.bin_callback(v, n_bins, vkv)
+            opts.bin_callback(v, n_bins, vkv, w, a)
         if w < min_w or a < min_a or vkv <= 0:
             continue
         active_bins += 1
@@ -281,6 +282,8 @@ def run_master_pattern_voltage_integrated(
         bin_indices.append(v)
         if opts.on_bin_integrated is not None:
             opts.on_bin_integrated(integrated, n_k, n_sites)
+        if opts.on_bin_complete is not None:
+            opts.on_bin_complete(v, n_bins, vkv)
         if opts.max_bins_run is not None and active_bins >= opts.max_bins_run:
             break
         if (

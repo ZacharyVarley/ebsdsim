@@ -29,9 +29,33 @@ def test_import():
 
 def test_preset_cif_and_halfw():
     from ebsdsim.api import _resolve_cif_path, _validate_halfw
+    from ebsdsim.progress import validate_verbosity
 
     assert _resolve_cif_path("Ni.cif").name == "Ni.cif"
     assert _validate_halfw(250) == 250
+    assert validate_verbosity(0) == 0
+
+
+@pytest.mark.skipif(not _gpu_available(), reason="WebGPU adapter unavailable")
+@pytest.mark.slow
+def test_master_pattern_exact_slow_cpu_tiny():
+    ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
+    result = es.master_pattern_from_cif(
+        ni,
+        voltage_kv=20.0,
+        halfw=8,
+        dmin=0.05,
+        energy_binwidth_keV=20.0,
+        rank=4,
+        chunk_size=8,
+        marginal_coverage=1.0,
+        exact_slow_cpu=True,
+        mc_backend="gpu",
+        n_trajectories=4096,
+    )
+    assert result.pattern.shape == (17, 17)
+    assert np.all(np.isfinite(result.pattern))
+    assert result.metadata["exact_slow_cpu"] is True
 
 
 @pytest.mark.skipif(not _gpu_available(), reason="WebGPU adapter unavailable")

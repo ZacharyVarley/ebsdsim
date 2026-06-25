@@ -24,7 +24,7 @@ from ebsdsim.material import build_cell_from_material
 from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.sgh import prepare_site_sgh_tables
 from ebsdsim.structure import build_cell_from_cif
-from ebsdsim.normalize import NormalizeMode
+from ebsdsim.progress import MasterPatternProgress, validate_verbosity
 from ebsdsim.types import MasterPatternMode
 
 _SIM_KWARGS_DOC = """
@@ -47,6 +47,13 @@ omega_deg : float, optional
     Azimuthal specimen rotation (degrees). Default ``0.0``.
 rank : int, optional
     Smith / Lyapunov iteration rank for the dynamical solve. Default ``20``.
+exact_slow_cpu : bool, optional
+    When ``True``, solve the full-rank Lyapunov equation on CPU via batched
+    ``numpy.linalg.eig`` instead of the GPU Smith iteration. Default ``False``.
+verbosity : {0, 1, 2}, optional
+    Progress reporting. ``0`` (default) is silent. ``1`` prints a run banner,
+    per-bin energy/amplitude, and bin wall times. ``2`` also prints dynamical
+    beam counts, chunk throughput, and per-chunk timing.
 chunk_size : int, optional
     GPU batch size for the multi-beam solve. Default ``256``.
 marginal_coverage : float, optional
@@ -280,6 +287,8 @@ def master_pattern(
     sigma_deg: float = 70.0,
     omega_deg: float = 0.0,
     rank: int = 20,
+    exact_slow_cpu: bool = False,
+    verbosity: int = 0,
     chunk_size: int = 256,
     marginal_coverage: float = 1.0,
     relative_image_stop: float = 0.01,
@@ -322,6 +331,8 @@ def master_pattern(
         sigma_deg=sigma_deg,
         omega_deg=omega_deg,
         rank=rank,
+        exact_slow_cpu=exact_slow_cpu,
+        verbosity=validate_verbosity(verbosity),
         chunk_size=chunk_size,
         mode="bloch",
         marginal_coverage=marginal_coverage,
@@ -350,6 +361,8 @@ def master_pattern_from_cif(
     sigma_deg: float = 70.0,
     omega_deg: float = 0.0,
     rank: int = 20,
+    exact_slow_cpu: bool = False,
+    verbosity: int = 0,
     chunk_size: int = 256,
     marginal_coverage: float = 1.0,
     relative_image_stop: float = 0.01,
@@ -403,6 +416,8 @@ def master_pattern_from_cif(
         sigma_deg=sigma_deg,
         omega_deg=omega_deg,
         rank=rank,
+        exact_slow_cpu=exact_slow_cpu,
+        verbosity=validate_verbosity(verbosity),
         chunk_size=chunk_size,
         mode="bloch",
         marginal_coverage=marginal_coverage,
@@ -431,6 +446,8 @@ def _run_master_pattern(
     sigma_deg: float,
     omega_deg: float,
     rank: int,
+    exact_slow_cpu: bool,
+    verbosity: int,
     chunk_size: int,
     mode: MasterPatternMode,
     marginal_coverage: float,
@@ -446,8 +463,18 @@ def _run_master_pattern(
     mc_min_trajectories: int = 1_048_576,
     mc_max_trajectories: int = 16_777_216,
     max_bins_run: int | None = None,
-    bin_callback: Callable[[int, int, float], None] | None = None,
+    bin_callback: Callable[[int, int, float, float, float], None] | None = None,
 ) -> MasterPattern:
+    verbosity = validate_verbosity(verbosity)
+    progress = MasterPatternProgress(
+        verbosity=verbosity,
+        source=source,
+        halfw=halfw,
+        dmin=dmin,
+        exact_slow_cpu=exact_slow_cpu,
+        rank=rank,
+        chunk_size=chunk_size,
+    )
     ctx = require_gpu()
     grid_size = 1 + 2 * halfw
     n_energy_bins = max(1, int(voltage_kv / energy_binwidth_keV))
@@ -489,6 +516,12 @@ def _run_master_pattern(
     if first_vkv is not None:
         lookup_prefetcher.prefetch(first_vkv)
     pg_grid = build_pg_k_grid(cell.pg_num, halfw)
+    n_k = pg_grid.khat.size // 3
+    progress.run_banner(
+        mc_backend=mc_backend_label,
+        n_bins=int(mc_for_bins.voltages_kv.size),
+        n_k=n_k,
+    )
     sgh = prepare_site_sgh_tables(cell, dmin)
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     metric = make_metric_buffer(kernels, cell)
@@ -500,6 +533,9 @@ def _run_master_pattern(
         metric=metric,
         chunk_size=chunk_size,
         rank=rank,
+        exact_slow_cpu=exact_slow_cpu,
+        verbosity=verbosity,
+        progress=progress,
         dmin=dmin,
         bethe_c_strong=bethe_c_strong,
         bethe_c_weak=bethe_c_weak,
@@ -542,9 +578,22 @@ def _run_master_pattern(
                 relative_image_stop=relative_image_stop,
                 on_bin_integrated=on_bin_integrated,
                 max_bins_run=max_bins_run,
-                bin_callback=bin_callback,
+                bin_callback=bin_callback or (progress.on_bin_start if progress.enabled else None),
+                on_bin_complete=progress.on_bin_complete if progress.enabled else None,
             )
         )
+        if progress.enabled:
+            if integrated_result.stopped_by_relative_change:
+                progress.integration_stopped(
+                    last_relative_change=integrated_result.last_relative_change,
+                    n_bins_run=integrated_result.n_bins_run,
+                )
+            print(
+                f"[ebsdsim] master pattern complete  "
+                f"{integrated_result.n_bins_run} bins integrated  "
+                f"{n_k} k-pts  {integrated_result.n_sites} site(s)",
+                flush=True,
+            )
     finally:
         lookup_prefetcher.close()
         if deps.reusable_persistent is not None:
@@ -593,6 +642,8 @@ def _run_master_pattern(
         # Dynamical-solver (Bethe / Smith) parameters — any change here
         # materially changes the simulated pattern.
         "rank": int(rank),
+        "exact_slow_cpu": bool(exact_slow_cpu),
+        "verbosity": int(verbosity),
         "bethe_c_strong": float(bethe_c_strong),
         "bethe_c_weak": float(bethe_c_weak),
         "bethe_c_cutoff": float(bethe_c_cutoff),
