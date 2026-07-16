@@ -1,0 +1,244 @@
+#------------------------------------------------------------------------------
+#$Date: 2016-03-21 05:34:46 +0200 (Mon, 21 Mar 2016) $
+#$Revision: 178485 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/4/03/06/4030618.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_4030618
+loop_
+_publ_author_name
+'Handizi, A.'
+'Boukhari, A.'
+'Holt, E. M.'
+'Aride, J.'
+'Belaiche, M.'
+'Drillon, M.'
+_publ_section_title
+;
+ (Cu,M)2P2O7; M = Mn, Co : synthesis, magnetism and solid state structures
+ of Cu0.92Mn1.08P2O7 and CuCoP2O7
+;
+_journal_name_full
+'European Journal of Solid State and Inorganic Chemistry'
+_journal_page_first              123
+_journal_page_last               135
+_journal_volume                  31
+_journal_year                    1994
+_chemical_formula_sum            'Co Cu O7 P2'
+_chemical_formula_weight         296.42
+_space_group_IT_number           1
+_symmetry_cell_setting           triclinic
+_symmetry_Int_Tables_number      1
+_symmetry_space_group_name_Hall  'P 1'
+_symmetry_space_group_name_H-M   'P 1'
+_cell_angle_alpha                109.06(3)
+_cell_angle_beta                 132.91(2)
+_cell_angle_gamma                38.62(2)
+_cell_formula_units_Z            1
+_cell_length_a                   6.912(3)
+_cell_length_b                   6.658(3)
+_cell_length_c                   6.315(3)
+_cell_volume                     118.69(17)
+_diffrn_ambient_temperature      293
+_diffrn_radiation_probe          x-ray
+_diffrn_radiation_type           MoK\a
+_diffrn_radiation_wavelength     0.71073
+_exptl_absorpt_coefficient_mu    8.630
+_exptl_crystal_density_diffrn    4.147
+_exptl_crystal_F_000             142
+_refine_ls_number_reflns         651
+_refine_ls_R_factor_gt           0.065
+_refine_ls_wR_factor_gt          0.087
+_cod_data_source_file            EJSSIC-1994-31-123-135-2.cif
+_cod_data_source_block           CuCoP2O7
+_cod_depositor_comments
+;
+No thermal parameters reported in the paper,
+then, values fixed arbitrarily to Biso = 1.
+;
+_cod_database_code               4030618
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+1 x,y,z
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_thermal_displace_type
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_U_iso_or_equiv
+Cu Cu Uiso 0.17310 0.74620 0.45020 1.000 0.0127
+Co Co Uiso -0.0779(7) 0.3688(7) 0.1959(5) 1.000 0.0127
+P1 P Uiso 1.140(2) 0.263(2) 0.828(2) 1.000 0.0127
+P2 P Uiso 0.962(2) 0.847(2) 0.828(2) 1.000 0.0127
+O1 O Uiso 0.852(5) 0.397(4) 0.847(4) 1.000 0.0127
+O2 O Uiso 1.007(7) 0.258(6) 0.526(5) 1.000 0.0127
+O3 O Uiso 1.630(6) 0.910(5) 1.123(4) 1.000 0.0127
+O4 O Uiso 0.905(5) 0.628(4) 0.683(4) 1.000 0.0127
+O5 O Uiso 1.288(5) 0.707(4) 0.841(4) 1.000 0.0127
+O6 O Uiso 0.492(10) 1.167(10) 0.529(7) 1.000 0.0127
+O7 O Uiso 1.058(5) 0.915(4) 1.118(4) 1.000 0.0127
+loop_
+_atom_type_symbol
+_atom_type_description
+_atom_type_scat_dispersion_real
+_atom_type_scat_dispersion_imag
+_atom_type_scat_source
+Co Co 0.3494 0.9721 ' International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+Cu Cu 0.3201 1.2651 ' International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+O O 0.0106 0.0060 ' International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+P P 0.1023 0.0942 ' International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle
+_geom_angle_site_symmetry_1
+_geom_angle_site_symmetry_3
+_geom_angle_publ_flag
+O1 Cu O3 158.88 . 1_354 yes
+O1 Cu O7 96.53 . 1_454 yes
+O1 Cu O5 77.12 . 1_455 yes
+O1 Cu O2 85.04 . 1_465 yes
+O1 Cu O6 83.61 . 1_545 yes
+O3 Cu O7 95.62 1_354 1_454 yes
+O3 Cu O5 97.68 1_354 1_455 yes
+O2 Cu O3 114.86 1_465 1_354 yes
+O3 Cu O6 75.60 1_354 1_545 yes
+O5 Cu O7 156.91 1_455 1_454 yes
+O2 Cu O7 74.77 1_465 1_454 yes
+O6 Cu O7 115.17 1_545 1_454 yes
+O2 Cu O5 82.52 1_465 1_455 yes
+O5 Cu O6 86.48 1_455 1_545 yes
+O2 Cu O6 165.70 1_465 1_545 yes
+O1 Co O5 83.5(13) 1_454 1_354 yes
+O2 Co O5 94.5(16) 1_455 1_354 yes
+O5 Co O6 161.5(18) 1_354 1_545 yes
+O1 Co O2 166.5(13) 1_454 1_455 yes
+O1 Co O6 93(2) 1_454 1_545 yes
+O2 Co O6 93(2) 1_455 1_545 yes
+O1 P1 O2 117(2) . . yes
+O1 P1 O4 103.2(17) . . yes
+O1 P1 O3 111(2) . 1_545 yes
+O2 P1 O4 83.3(18) . . yes
+O2 P1 O3 113.3(17) . 1_545 yes
+O3 P1 O4 128(2) 1_545 . yes
+O4 P2 O5 105.8(17) . . yes
+O4 P2 O6 86(3) . . yes
+O4 P2 O7 130(2) . . yes
+O5 P2 O6 113(4) . . yes
+O5 P2 O7 108.8(19) . . yes
+O6 P2 O7 111(2) . . yes
+Cu O1 P1 125.84 . . yes
+Cu O1 Co 98.72 . 1_656 yes
+Co O1 P1 135.2(14) 1_656 . yes
+Cu O2 P1 112.71 1_645 . yes
+Co O2 P1 145(3) 1_655 . yes
+Cu O2 Co 98.22 1_645 1_655 yes
+Cu O3 P1 132.70 1_756 1_565 yes
+P1 O4 P2 136.8(12) . . yes
+Cu O5 P2 125.52 1_655 . yes
+Co O5 P2 132.3(15) 1_756 . yes
+Cu O5 Co 100.62 1_655 1_756 yes
+Cu O6 P2 116.49 1_565 . yes
+Co O6 P2 140(5) 1_565 . yes
+Cu O6 Co 100.10 1_565 1_565 yes
+Cu O7 P2 130.10 1_656 . yes
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_distance
+_geom_bond_site_symmetry_2
+_geom_bond_publ_flag
+Cu O1 2.1095 . yes
+Cu O3 2.0157 1_354 yes
+Cu O7 2.0413 1_454 yes
+Cu O5 2.0536 1_455 yes
+Cu O2 2.5939 1_465 yes
+Cu O6 2.5406 1_545 yes
+Co O5 1.95(3) 1_354 yes
+Co O1 1.95(3) 1_454 yes
+Co O2 1.97(5) 1_455 yes
+Co O6 2.01(7) 1_545 yes
+P1 O1 1.50(4) . yes
+P1 O2 1.45(3) . yes
+P1 O4 1.63(3) . yes
+P1 O3 1.52(2) 1_545 yes
+P2 O4 1.63(3) . yes
+P2 O5 1.57(5) . yes
+P2 O6 1.46(4) . yes
+P2 O7 1.51(2) . yes
+loop_
+_geom_torsion_atom_site_label_1
+_geom_torsion_atom_site_label_2
+_geom_torsion_atom_site_label_3
+_geom_torsion_atom_site_label_4
+_geom_torsion
+_geom_torsion_site_symmetry_1
+_geom_torsion_site_symmetry_3
+_geom_torsion_site_symmetry_4
+_geom_torsion_publ_flag
+O3 Cu O1 P1 109.69 1_354 . . no
+O3 Cu O1 Co -75.75 1_354 . 1_656 no
+O7 Cu O1 P1 -15.06 1_454 . . no
+O7 Cu O1 Co 159.50 1_454 . 1_656 no
+O5 Cu O1 P1 -172.52 1_455 . . no
+O5 Cu O1 Co 2.03 1_455 . 1_656 no
+O2 Cu O1 P1 -89.08 1_465 . . no
+O2 Cu O1 Co 85.48 1_465 . 1_656 no
+O6 Cu O1 P1 99.64 1_545 . . no
+O6 Cu O1 Co -85.80 1_545 . 1_656 no
+O1 Cu O7 P2 112.08 . 1_454 1_454 no
+O1 Cu O5 P2 -169.26 . 1_455 1_455 no
+O1 Cu O5 Co -2.05 . 1_455 1_656 no
+O1 Cu O2 P1 -66.41 . 1_465 1_465 no
+O1 Cu O2 Co 96.97 . 1_465 1_565 no
+O1 Cu O6 Co 175.69 . 1_545 . no
+O1 Cu O6 P2 12.41 . 1_545 1_545 no
+O3 Cu O6 Co -0.59 1_354 1_545 . no
+O7 Cu O6 Co -90.07 1_454 1_545 . no
+O5 Cu O6 Co 98.28 1_455 1_545 . no
+O1 Co O6 Cu 84.29 1_454 1_545 . no
+O2 Co O6 Cu -107.82 1_455 1_545 . no
+O2 P1 O1 Cu -24.16 . . . no
+O2 P1 O1 Co 164(2) . . 1_656 no
+O4 P1 O1 Cu 64.81 . . . no
+O4 P1 O1 Co -108(2) . . 1_656 no
+O3 P1 O1 Cu -155.41 1_545 . . no
+O3 P1 O1 Co 32(3) 1_545 . 1_656 no
+O1 P1 O2 Cu -73.41 . . 1_645 no
+O1 P1 O2 Co 136(4) . . 1_655 no
+O4 P1 O2 Cu -174.83 . . 1_645 no
+O4 P1 O2 Co 35(4) . . 1_655 no
+O3 P1 O2 Cu 56.60 1_545 . 1_645 no
+O3 P1 O2 Co -94(4) 1_545 . 1_655 no
+O1 P1 O4 P2 93(4) . . . no
+O2 P1 O4 P2 -152(4) . . . no
+O3 P1 O4 P2 -37(5) 1_545 . . no
+O5 P2 O4 P1 94(4) . . . no
+O6 P2 O4 P1 -153(5) . . . no
+O7 P2 O4 P1 -39(5) . . . no
+O4 P2 O5 Cu 60.47 . . 1_655 no
+O4 P2 O5 Co -102.4(18) . . 1_756 no
+O6 P2 O5 Cu -32.25 . . 1_655 no
+O6 P2 O5 Co 165(2) . . 1_756 no
+O7 P2 O5 Cu -156.07 . . 1_655 no
+O7 P2 O5 Co 41(2) . . 1_756 no
+O4 P2 O6 Cu -175.61 . . 1_565 no
+O4 P2 O6 Co 31(5) . . 1_565 no
+O5 P2 O6 Cu -70.01 . . 1_565 no
+O5 P2 O6 Co 136(4) . . 1_565 no
+O7 P2 O6 Cu 52.62 . . 1_565 no
+O7 P2 O6 Co -101(4) . . 1_565 no
+O4 P2 O7 Cu 2.13 . . 1_656 no
+O5 P2 O7 Cu -129.37 . . 1_656 no
+O6 P2 O7 Cu 105.54 . . 1_656 no

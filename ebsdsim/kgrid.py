@@ -8,7 +8,12 @@ from typing import Iterator
 import numpy as np
 from numpy.typing import NDArray
 
-from ebsdsim.pg_ops import CENTROSYMMETRIC_PG, fs_normals, in_fundamental_sector_vec, pg_num_to_symbol
+from ebsdsim.pg_ops import (
+    CENTROSYMMETRIC_PG,
+    fs_normals,
+    folding_symbol,
+    in_fundamental_sector_vec,
+)
 
 
 @dataclass
@@ -27,6 +32,7 @@ class PgKGrid:
     is_centro: bool
     khat: NDArray[np.float32]
     kij: NDArray[np.int32]
+    symbol: str = ""
 
 
 @dataclass
@@ -151,8 +157,8 @@ def _lambert_pixel_directions(hw: int, southern: bool) -> NDArray[np.float32]:
     return _square_to_hemisphere_array(x, y, southern).reshape(-1)
 
 
-def build_pg_k_grid(pg_num: int, hw: int) -> PgKGrid:
-    symbol = pg_num_to_symbol(pg_num)
+def build_pg_k_grid(pg_num: int, hw: int, space_group: int | None = None) -> PgKGrid:
+    symbol = folding_symbol(pg_num, space_group)
     normals = fs_normals(symbol)
     is_centro = pg_num in CENTROSYMMETRIC_PG
     eps = 2.0 / hw
@@ -195,6 +201,7 @@ def build_pg_k_grid(pg_num: int, hw: int) -> PgKGrid:
         is_centro=is_centro,
         khat=khat,
         kij=kij,
+        symbol=symbol,
     )
 
 

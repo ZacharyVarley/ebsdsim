@@ -1,0 +1,61 @@
+#------------------------------------------------------------------------------
+#$Date: 2016-02-13 21:28:24 +0200 (Sat, 13 Feb 2016) $
+#$Revision: 176429 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/1/52/75/1527508.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_1527508
+loop_
+_publ_author_name
+'Hestermann, K.'
+'Hoppe, R.'
+_publ_section_title
+;
+ Zur Kristallstruktur von Na Cu O2
+;
+_journal_name_full
+'Zeitschrift fuer Anorganische und Allgemeine Chemie'
+_journal_page_first              261
+_journal_page_last               269
+_journal_volume                  367
+_journal_year                    1969
+_chemical_formula_sum            'Cu Na O2'
+_chemical_name_systematic        'Na (Cu O2)'
+_space_group_IT_number           2
+_symmetry_space_group_name_Hall  '-P 1'
+_symmetry_space_group_name_H-M   'P -1'
+_cell_angle_alpha                76.24
+_cell_angle_beta                 113.41
+_cell_angle_gamma                128.16
+_cell_formula_units_Z            1
+_cell_length_a                   2.748
+_cell_length_b                   6.672
+_cell_length_c                   3.462
+_cell_volume                     45.798
+_citation_journal_id_ASTM        ZAACAB
+_cod_data_source_file            Hestermann_ZAACAB_1969_1240.cif
+_cod_data_source_block           Cu1Na1O2
+_cod_original_cell_volume        45.79849
+_cod_original_formula_sum        'Cu1 Na1 O2'
+_cod_database_code               1527508
+loop_
+_symmetry_equiv_pos_as_xyz
+x,y,z
+-x,-y,-z
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_U_iso_or_equiv
+O1 O-2 0.805 0.23 0.92 1 0.0
+Na1 Na+1 0.5 0.5 0.5 1 0.0
+Cu1 Cu+3 0 0 0 1 0.0

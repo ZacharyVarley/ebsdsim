@@ -6,7 +6,6 @@ import importlib.resources
 
 import numpy as np
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.integrate import surrogate_to_multi_voltage_mc
 from ebsdsim.lookup import (
     BuildLookupOptions,
@@ -20,14 +19,14 @@ from ebsdsim.lookup import (
     prepare_diff_lookup_geometry,
 )
 from ebsdsim.surrogate import infer_direct_exp_from_cell_rebinned
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 
 _DMIN = 0.05
 
 
 def _gan_cell():
-    text = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif").read_text()
-    return build_cell_from_cif(parse_cif_crystal(text))
+    path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif")
+    return build_cell_from_cif_path(str(path))
 
 
 def test_geometry_lookup_matches_full_build():

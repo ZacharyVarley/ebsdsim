@@ -1,0 +1,104 @@
+#------------------------------------------------------------------------------
+#$Date: 2016-02-14 06:40:26 +0200 (Sun, 14 Feb 2016) $
+#$Revision: 176432 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/4/33/66/4336696.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_4336696
+loop_
+_publ_author_name
+'Keitaro Tezuka'
+'Yoshimi Tokuhara'
+'Makoto Wakeshima'
+'Yue Jin Shan'
+'Hideo Imoto'
+'Yukio Hinatsu'
+_publ_section_title
+;
+ Crystal Structures and Properties of Europium Aluminum Oxynitride
+ Eu2AlO3.75N0.1 and Europium Aluminum Oxide EuAl2O4
+;
+_journal_name_full               'Inorganic Chemistry'
+_journal_page_first              12972
+_journal_page_last               12979
+_journal_paper_doi               10.1021/ic4013334
+_journal_volume                  52
+_journal_year                    2013
+_chemical_formula_moiety         'Al Eu2 N0.1 O3.75'
+_chemical_formula_sum            'Al Eu2 N0.1 O3.75'
+_chemical_formula_weight         392.308
+_space_group_IT_number           5
+_symmetry_cell_setting           monoclinic
+_symmetry_Int_Tables_number      5
+_symmetry_space_group_name_Hall  'I 2y'
+_symmetry_space_group_name_H-M   'I 1 2 1'
+_audit_update_record
+;
+2013-05-30 # Formatted by publCIF
+;
+_cell_angle_alpha                90
+_cell_angle_beta                 90.6860(5)
+_cell_angle_gamma                90
+_cell_formula_units_Z            2
+_cell_length_a                   3.71128(23)
+_cell_length_b                   3.68935(24)
+_cell_length_c                   12.3900(8)
+_cell_measurement_temperature    298
+_cell_volume                     169.634(19)
+_diffrn_measurement_device_type  'Rigaku RINT2200'
+_diffrn_radiation_type           CuKa1
+_diffrn_radiation_wavelength     1.540593
+_exptl_crystal_density_diffrn    7.680545
+_exptl_crystal_F_000             339.400
+_pd_phase_name                   Eu2AlO3.75N0.1
+_cod_data_source_file            ic4013334_si_001.cif
+_cod_data_source_block           Eu2AlO3.75N0.1
+_cod_original_cell_volume        169.63(2)
+_cod_original_sg_symbol_Hall     I2y
+_cod_original_sg_symbol_H-M      'I 2'
+_cod_database_code               4336696
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+'-x, y, -z'
+'x+1/2, y+1/2, z+1/2'
+'-x+1/2, y+1/2, -z+1/2'
+loop_
+_atom_site_label
+_atom_site_occupancy
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_adp_type
+_atom_site_B_iso_or_equiv
+_atom_site_type_symbol
+Eu1 1.0 0.49682(16) 0.504(13) 0.85755(4) Biso 0.606546 Eu
+Al 1.0 0.000000 0.000000 0.000000 Biso 0.883369 Al
+O1 0.9375 0.000000 0.539(15) 0.000000 Biso 0.324513 O
+O2 0.9375 0.000000 0.52(3) 0.500000 Biso 1.670016 O
+O3 0.9375 0.4980(17) 0.51(3) 0.6660(4) Biso 0.835916 O
+N1 0.0250 0.000000 0.539(15) 0.000000 Biso 0.324513 n
+N2 0.0250 0.000000 0.52(3) 0.500000 Biso 1.670016 n
+N3 0.0250 0.4980(17) 0.51(3) 0.6660(4) Biso 0.835916 n
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Eu1 0.00768 0.00768 0.00768 0.00000 0.00009 0.00000
+Al 0.01119 0.01119 0.01119 0.00000 0.00013 0.00000
+O1 0.00411 0.00411 0.00411 0.00000 0.00005 0.00000
+O2 0.02115 0.02115 0.02115 0.00000 0.00025 0.00000
+O3 0.01059 0.01059 0.01059 0.00000 0.00013 0.00000
+N1 0.00411 0.00411 0.00411 0.00000 0.00005 0.00000
+N2 0.02115 0.02115 0.02115 0.00000 0.00025 0.00000
+N3 0.01059 0.01059 0.01059 0.00000 0.00013 0.00000

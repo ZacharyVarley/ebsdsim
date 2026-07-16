@@ -5,6 +5,50 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-07-16
+
+### Changed
+
+- CIF ingest now uses the vendored `ebsdsim.cif_reader` package (NumPy only)
+  instead of PyCifRW. Structures are standardized to the International Tables
+  setting on load (dual-origin groups use origin choice 2) and expanded with
+  matching Hall operators, not legacy `SG_OP_DATA`.
+- Master-pattern metadata from CIF includes `cif_input` (as-read snapshot) and
+  IT-standard setting stamps on `cell` (`setting`, `origin_choice`,
+  `transformed`, `P`, `p`, …).
+
+### Fixed
+
+- Corrected Lambert fundamental-sector folding for several point groups whose
+  orientation was wrong. These are grouped by cause below. In every case the
+  fundamental sector (and, for the orientation bugs, the point-group operators)
+  used to fold the sphere did not match the crystal, so the affected master
+  patterns were sampled and expanded over the wrong region.
+  - Monoclinic `2`, `m`, `2/m` now fold in the unique-b setting (matching the IT
+    cells ebsdsim simulates), not unique-c. Affects space groups 3-15.
+  - Monoclinic `2/m` fundamental sector was `{z>=0, x>=0}`, which left half the
+    sphere uncovered because the `m_y` mirror flips only y. Corrected to
+    `{z>=0, y>=0}`. Affects space groups 10-15.
+  - Trigonal and secondary-axis orientations that `pg_from_sg` cannot
+    distinguish are now selected from the space-group number: `312`/`31m`/`-31m`
+    (space groups 149, 151, 153, 157, 159, 162, 163), `-4m2` (115-120), and
+    `-62m` (189, 190). Previously these folded with the point-group axes rotated
+    30 or 45 degrees.
+- Verified the folding point-group selection against each crystal's actual
+  Cartesian symmetry (derived from its space-group operators) for all 230 space
+  groups across multiple cell metrics per system.
+
+### Notes
+
+- Master patterns saved before 0.1.9 for the affected space groups (3-15,
+  115-120, 149, 151, 153, 157, 159, 162, 163, 189, 190) store fundamental-sector
+  data sampled over the wrong region and cannot be repaired in place; regenerate
+  them. All other space groups are unaffected and their saved files remain valid.
+
+### Removed
+
+- Dependency on PyCifRW.
+
 ## [0.1.8] - 2026-06-25
 
 ### Added

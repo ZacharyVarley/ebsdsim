@@ -65,6 +65,13 @@ def test_metadata_records_parameters_and_cell():
         assert "b_iso_angstrom_sq" in site
         assert "b_iso_nm_sq" in site
         assert site["b_iso_angstrom_sq"] == pytest.approx(site["b_iso_nm_sq"] * 100.0)
+    # CIF ingest stamps: as-read snapshot + IT-standard setting fields.
+    assert "cif_input" in meta
+    assert meta["cif_input"] is not None
+    assert "symmetry_provenance" in meta
+    assert cell.get("setting") == "IT standard"
+    assert "transformed" in cell
+    assert "P" in cell and "p" in cell
 
 
 @pytest.mark.slow

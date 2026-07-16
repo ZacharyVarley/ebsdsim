@@ -1,19 +1,18 @@
 import importlib.resources
 import numpy as np
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.integrate import PerVoltageContext
 from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
 from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
 from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
 from ebsdsim.integrate import surrogate_to_multi_voltage_mc
 from ebsdsim.surrogate import infer_direct_exp_from_cell_rebinned
 
 ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
-cell = build_cell_from_cif(parse_cif_crystal(ni.read_text(encoding="utf-8")))
+cell = build_cell_from_cif_path(ni)
 direct = infer_direct_exp_from_cell_rebinned(
     cell=cell, sigma_deg=70.0, beam_kv=20.0, energy_binwidth_keV=1.0, n_energy_bins=20
 )

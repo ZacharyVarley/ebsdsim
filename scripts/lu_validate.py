@@ -6,7 +6,6 @@ import importlib.resources
 
 import numpy as np
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
 from ebsdsim.gpu.device import sync_device
 from ebsdsim.gpu.dynamical import FixedRankChunkDescriptor
@@ -14,7 +13,7 @@ from ebsdsim.integrate import compute_mu_eff
 from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
 from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
 from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif, metric_to_float32
+from ebsdsim.structure import build_cell_from_cif_path, metric_to_float32
 
 
 def c64_to_complex(flat: np.ndarray) -> np.ndarray:
@@ -32,7 +31,7 @@ def complex_to_c64(z: np.ndarray) -> np.ndarray:
 def main() -> None:
     row = 146
     ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
-    cell = build_cell_from_cif(parse_cif_crystal(ni.read_text(encoding="utf-8")))
+    cell = build_cell_from_cif_path(ni)
     ctx = require_gpu()
     lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=19.5, dmin=0.05))
     pg = build_pg_k_grid(cell.pg_num, 250)

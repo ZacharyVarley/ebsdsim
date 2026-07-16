@@ -10,7 +10,7 @@ from typing import Any, Callable, Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from ebsdsim.cif import parse_cif_crystal
+from ebsdsim.cif import load_structure
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu, run_monte_carlo_gpu
 from ebsdsim.integrate import (
     PerVoltageContext,
@@ -23,7 +23,7 @@ from ebsdsim.kgrid import build_pg_k_grid
 from ebsdsim.material import build_cell_from_material
 from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_structure
 from ebsdsim.progress import MasterPatternProgress, validate_verbosity
 from ebsdsim.types import MasterPatternMode
 
@@ -191,6 +191,7 @@ class MasterPattern:
     kij: NDArray[np.int32] | None = None
     khat: NDArray[np.float32] | None = None
     pg_num: int | None = None
+    pg_symbol: str | None = None
     data: NDArray[np.float32] = field(default_factory=lambda: np.zeros((0,), np.float32))
     axes: dict[str, Any] = field(default_factory=dict)
 
@@ -236,7 +237,7 @@ class MasterPattern:
         from ebsdsim.weights import site_weights_from_meta_cell
 
         n_k, n_sites = int(self.n_k), int(self.n_sites)
-        symbol = pg_num_to_symbol(int(self.pg_num))
+        symbol = self.pg_symbol or self.metadata.get("pg_symbol") or pg_num_to_symbol(int(self.pg_num))
         halfw = int(self.metadata["halfw"])
         side = int(self.metadata["grid_size"])
         site_weights = site_weights_from_meta_cell(self.metadata.get("cell", {}))
@@ -379,9 +380,8 @@ def master_pattern_from_cif(
     f"""Generate an EBSD master pattern from a CIF file or bundled preset.
 
     ``path`` may be a filesystem path or a bundled preset name such as
-    ``"GaN.cif"`` or ``"Ni.cif"``. The CIF should include
-    ``_space_group_IT_number`` (or equivalent) so the point group can be
-    resolved.
+    ``"GaN.cif"`` or ``"Ni.cif"``. The CIF is standardized to the International
+    Tables setting on load (dual-origin groups use origin choice 2).
 
     Parameters
     ----------
@@ -399,11 +399,11 @@ def master_pattern_from_cif(
     FileNotFoundError
         If ``path`` does not resolve to a file or bundled preset.
     ValueError
-        If the point group cannot be determined from the CIF.
+        If the CIF is symmetry-inconsistent or the point group cannot be resolved.
     """
     cif_path = _resolve_cif_path(path)
-    crystal = parse_cif_crystal(cif_path.read_text(encoding="utf-8", errors="replace"))
-    cell = build_cell_from_cif(crystal)
+    structure = load_structure(cif_path)
+    cell = build_cell_from_structure(structure)
     if cell.pg_num is None:
         raise ValueError("Could not resolve point group from CIF; include _space_group_IT_number.")
     return _run_master_pattern(
@@ -432,6 +432,8 @@ def master_pattern_from_cif(
         mc_min_trajectories=mc_min_trajectories,
         mc_max_trajectories=mc_max_trajectories,
         source=str(cif_path),
+        structure_meta=structure.metadata(),
+        structure_log=structure.log(),
     )
 
 
@@ -464,6 +466,8 @@ def _run_master_pattern(
     mc_max_trajectories: int = 16_777_216,
     max_bins_run: int | None = None,
     bin_callback: Callable[[int, int, float, float, float], None] | None = None,
+    structure_meta: dict[str, Any] | None = None,
+    structure_log: str | None = None,
 ) -> MasterPattern:
     verbosity = validate_verbosity(verbosity)
     progress = MasterPatternProgress(
@@ -475,6 +479,8 @@ def _run_master_pattern(
         rank=rank,
         chunk_size=chunk_size,
     )
+    if structure_log and verbosity >= 1:
+        print(f"[ebsdsim] {structure_log}", flush=True)
     ctx = require_gpu()
     grid_size = 1 + 2 * halfw
     n_energy_bins = max(1, int(voltage_kv / energy_binwidth_keV))
@@ -515,7 +521,7 @@ def _run_master_pattern(
     lookup_prefetcher = LookupPrefetcher(lookup_geometry, dmin, mode)
     if first_vkv is not None:
         lookup_prefetcher.prefetch(first_vkv)
-    pg_grid = build_pg_k_grid(cell.pg_num, halfw)
+    pg_grid = build_pg_k_grid(cell.pg_num, halfw, cell.space_group)
     n_k = pg_grid.khat.size // 3
     progress.run_banner(
         mc_backend=mc_backend_label,
@@ -603,6 +609,7 @@ def _run_master_pattern(
     from ebsdsim.save import _stack_bins, cell_metadata
     from ebsdsim.pg_ops import CENTROSYMMETRIC_PG, pg_num_to_symbol
 
+    pg_symbol = pg_grid.symbol or pg_num_to_symbol(int(cell.pg_num))
     khat = pg_grid.khat.reshape(-1, 3).astype(np.float32, copy=False)
     is_centro = int(cell.pg_num) in CENTROSYMMETRIC_PG
     needs_southern = bool(np.any(khat[:, 2] < -1e-9))
@@ -627,6 +634,23 @@ def _run_master_pattern(
     e_int = axes["energy_integrated_index"]
     s_int = axes["site_integrated_index"]
     pattern = np.ascontiguousarray(data[e_int, s_int, 0])
+
+    sim_cell_meta = cell_metadata(cell)
+    cell_meta = dict(sim_cell_meta)
+    if structure_meta is not None:
+        used = structure_meta.get("cell") or {}
+        for key in (
+            "setting",
+            "origin_choice",
+            "transformed",
+            "setting_describe",
+            "setting_note",
+            "P",
+            "p",
+            "rhombohedral_input",
+        ):
+            if key in used:
+                cell_meta[key] = used[key]
 
     metadata: dict[str, Any] = {
         "format": "ebsdsim-master-pattern",
@@ -663,7 +687,7 @@ def _run_master_pattern(
         "mc_last_relative_change": float(getattr(mc, "last_relative_change", float("inf"))),
         # Geometry / point group.
         "pg_num": int(cell.pg_num),
-        "pg_symbol": pg_num_to_symbol(int(cell.pg_num)),
+        "pg_symbol": pg_symbol,
         "is_centrosymmetric": bool(is_centro),
         "needs_southern_hemisphere": needs_southern,
         "n_k": int(integrated_result.n_k),
@@ -671,8 +695,11 @@ def _run_master_pattern(
         # Full crystallographic cell, including per-site isotropic
         # Debye–Waller factors (these are frequently estimated and do change
         # the outgoing master pattern, so they are recorded verbatim).
-        "cell": cell_metadata(cell),
+        "cell": cell_meta,
     }
+    if structure_meta is not None:
+        metadata["symmetry_provenance"] = structure_meta.get("symmetry_provenance")
+        metadata["cif_input"] = structure_meta.get("cif_input")
 
     return MasterPattern(
         pattern=pattern,
@@ -686,6 +713,7 @@ def _run_master_pattern(
         kij=kij,
         khat=khat,
         pg_num=int(cell.pg_num),
+        pg_symbol=pg_symbol,
         data=data,
         axes=axes,
     )

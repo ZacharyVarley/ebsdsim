@@ -1,0 +1,258 @@
+#------------------------------------------------------------------------------
+#$Date: 2018-10-29 09:33:49 +0200 (Mon, 29 Oct 2018) $
+#$Revision: 211691 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/7/22/07/7220794.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_7220794
+loop_
+_publ_author_name
+'Nemeth, Karoly'
+'Unni, Aditya Krishnan'
+'Kalnmals, Christopher'
+'Segre, Carlo U.'
+'Kaduk, James A.'
+'Bloom, Ira'
+'Maroni, Victor'
+_publ_section_title
+;
+ The Synthesis of Ternary Acetylides with Tellurium: LiTeC2 and Na2TeC2
+;
+_journal_name_full               'RSC Adv.'
+_journal_paper_doi               10.1039/C5RA08983B
+_journal_year                    2015
+_chemical_formula_sum            'C2 Na2'
+_chemical_formula_weight         70.00
+_chemical_name_systematic        ' ?'
+_space_group_IT_number           142
+_symmetry_cell_setting           tetragonal
+_symmetry_space_group_name_Hall  '-I 4bd 2c'
+_symmetry_space_group_name_H-M   'I 41/a c d :2'
+_audit_update_record
+;
+2015-05-13 deposited with the CCDC.
+2015-06-17 downloaded from the CCDC.
+;
+_cell_angle_alpha                90.0
+_cell_angle_beta                 90.0
+_cell_angle_gamma                90.0
+_cell_formula_units_Z            8
+_cell_length_a                   6.551(11)
+_cell_length_b                   6.551
+_cell_length_c                   12.771(25)
+_cell_volume                     548.1(14)
+_pd_block_id
+2015-05-07T08:12|NA2TEC2-I4MMM_phase2|James_A._Kaduk||
+_pd_phase_name                   'Na2 C2'
+_cod_data_source_file            c5ra08983b8.cif
+_cod_data_source_block           NA2TEC2-I4MMM_phase_2
+_cod_depositor_comments
+;
+The following automatic conversions were performed:
+
+'_geom_bond_publ_flag' value 'N' changed to 'n' according to
+/usr/data/users/saulius/crontab/automatic-downloads/rss-feeds/RSC/lib/dictionaries/cif_core.dic
+dictionary named 'cif_core.dic' version 2.4.2 from 2011-04-26 (21
+time).
+
+'_geom_angle_publ_flag' value 'N' changed to 'n' according to
+/usr/data/users/saulius/crontab/automatic-downloads/rss-feeds/RSC/lib/dictionaries/cif_core.dic
+dictionary named 'cif_core.dic' version 2.4.2 from 2011-04-26 (87
+times).
+
+Automatic conversion script
+Id: cif_fix_values 3271 2015-04-21 07:52:19Z andrius 
+
+2018-10-04
+Z value and formula fixed to values more according to usual
+chemical conventions.                 miguel
+;
+_cod_original_formula_sum            'C Na'
+_cod_original_formula_weight         35.00
+_cod_original_formula_units_Z            16
+_cod_original_cell_volume        548.0(26)
+_cod_original_sg_symbol_H-M      'I 41/a c d'
+_cod_database_code               7220794
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+1 +x,+y,+z
+2 -y+1/4,+x+3/4,+z+1/4
+3 -x+1/2,-y,+z+1/2
+4 +y+1/4,-x+1/4,+z+3/4
+5 -x,+y,+z+1/2
+6 -y+1/4,-x+3/4,+z+3/4
+7 +x+1/2,-y,+z
+8 +y+1/4,+x+1/4,+z+1/4
+-1 -x,-y,-z
+-2 +y+3/4,-x+1/4,-z+3/4
+-3 +x+1/2,+y,-z+1/2
+-4 -y+3/4,+x+3/4,-z+1/4
+-5 +x,-y,-z+1/2
+-6 +y+3/4,+x+1/4,-z+1/4
+-7 -x+1/2,+y,-z
+-8 -y+3/4,-x+3/4,-z+3/4
+101 +x+1/2,+y+1/2,+z+1/2
+102 -y+3/4,+x+1/4,+z+3/4
+103 -x,-y+1/2,+z
+104 +y+3/4,-x+3/4,+z+1/4
+105 -x+1/2,+y+1/2,+z
+106 -y+3/4,-x+1/4,+z+1/4
+107 +x,-y+1/2,+z+1/2
+108 +y+3/4,+x+3/4,+z+3/4
+-101 -x+1/2,-y+1/2,-z+1/2
+-102 +y+1/4,-x+3/4,-z+1/4
+-103 +x,+y+1/2,-z
+-104 -y+1/4,+x+1/4,-z+3/4
+-105 +x+1/2,-y+1/2,-z
+-106 +y+1/4,+x+3/4,-z+3/4
+-107 -x,+y+1/2,-z+1/2
+-108 -y+1/4,-x+1/4,-z+1/4
+loop_
+_atom_site_type_symbol
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_thermal_displace_type
+_atom_site_U_iso_or_equiv
+_atom_site_symmetry_multiplicity
+Na Na1 0.18997 0.0 0.25 1.0 Uiso 0.02 16
+C C2 0.06279 0.31279 0.125 1.0 Uiso 0.005 16
+loop_
+_atom_type_symbol
+_atom_type_number_in_cell
+C 16.0
+Na 16.0
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle
+_geom_angle_site_symmetry_1
+_geom_angle_site_symmetry_3
+_geom_angle_publ_flag
+Na1 Na1 Na1 166.06(4) 2_545 4_554 n
+Na1 Na1 Na1 96.969(18) 2_545 7_455 n
+Na1 Na1 Na1 83.031(18) 2_545 7_555 n
+Na1 Na1 Na1 81.587(21) 2_545 105_433 n
+Na1 Na1 Na1 95.144(13) 2_545 105_443 n
+Na1 Na1 C2 134.81(5) 2_545 1_555 n
+Na1 Na1 C2 54.31(8) 2_545 2_545 n
+Na1 Na1 C2 118.36(10) 2_545 -4_555 n
+Na1 Na1 C2 50.90(6) 2_545 -5_455 n
+Na1 Na1 C2 137.52(5) 2_545 103_353 n
+Na1 Na1 C2 51.16(7) 2_545 106_443 n
+Na1 Na1 Na1 96.969(18) 4_554 7_455 n
+Na1 Na1 Na1 83.031(18) 4_554 7_555 n
+Na1 Na1 Na1 95.144(13) 4_554 105_433 n
+Na1 Na1 Na1 81.587(21) 4_554 105_443 n
+Na1 Na1 C2 50.90(6) 4_554 1_555 n
+Na1 Na1 C2 137.52(5) 4_554 2_545 n
+Na1 Na1 C2 51.16(7) 4_554 -4_555 n
+Na1 Na1 C2 134.81(5) 4_554 -5_455 n
+Na1 Na1 C2 54.31(8) 4_554 103_353 n
+Na1 Na1 C2 118.36(10) 4_554 106_443 n
+Na1 Na1 Na1 180.0 7_455 7_555 n
+Na1 Na1 Na1 103.5022 7_455 105_433 n
+Na1 Na1 Na1 103.5022 7_455 105_443 n
+Na1 Na1 C2 72.217(16) 7_455 1_555 n
+Na1 Na1 C2 50.56(5) 7_455 2_545 n
+Na1 Na1 C2 128.82(5) 7_455 -4_555 n
+Na1 Na1 C2 72.217(16) 7_455 -5_455 n
+Na1 Na1 C2 50.56(5) 7_455 103_353 n
+Na1 Na1 C2 128.82(5) 7_455 106_443 n
+Na1 Na1 Na1 76.4978 7_555 105_433 n
+Na1 Na1 Na1 76.4978 7_555 105_443 n
+Na1 Na1 C2 107.783(16) 7_555 1_555 n
+Na1 Na1 C2 129.44(5) 7_555 2_545 n
+Na1 Na1 C2 51.18(5) 7_555 -4_555 n
+Na1 Na1 C2 107.783(16) 7_555 -5_455 n
+Na1 Na1 C2 129.44(5) 7_555 103_353 n
+Na1 Na1 C2 51.18(5) 7_555 106_443 n
+Na1 Na1 Na1 152.9955 105_433 105_443 n
+Na1 Na1 C2 143.29(7) 105_443 1_555 n
+Na1 Na1 C2 71.991(18) 105_443 2_545 n
+Na1 Na1 C2 52.56(4) 105_443 -4_555 n
+Na1 Na1 C2 48.77(4) 105_443 -5_455 n
+Na1 Na1 C2 127.29(4) 105_443 103_353 n
+Na1 Na1 C2 108.371(19) 105_443 106_443 n
+Na1 Na1 C2 48.77(4) 105_453 1_555 n
+Na1 Na1 C2 127.29(4) 105_453 2_545 n
+Na1 Na1 C2 108.371(19) 105_453 -4_555 n
+Na1 Na1 C2 143.29(7) 105_453 -5_455 n
+Na1 Na1 C2 71.991(18) 105_453 103_353 n
+Na1 Na1 C2 52.56(4) 105_453 106_443 n
+C2 Na1 C2 121.19(6) 1_555 2_545 n
+C2 Na1 C2 100.74(13) 1_555 -4_555 n
+C2 Na1 C2 144.434(33) 1_555 -5_455 n
+C2 Na1 C2 25.061(23) 1_555 103_353 n
+C2 Na1 C2 101.33(9) 1_555 106_443 n
+C2 Na1 C2 123.59(6) 2_545 -4_555 n
+C2 Na1 C2 25.061(23) 2_545 -5_455 n
+C2 Na1 C2 101.12(9) 2_545 103_353 n
+C2 Na1 C2 104.07(14) 2_545 106_443 n
+C2 Na1 C2 101.33(9) -4_555 -5_455 n
+C2 Na1 C2 104.07(14) -4_555 103_353 n
+C2 Na1 C2 102.36(9) -4_555 106_443 n
+C2 Na1 C2 121.19(6) -5_455 103_353 n
+C2 Na1 C2 100.74(13) -5_455 106_443 n
+C2 Na1 C2 123.59(6) 103_353 106_443 n
+Na1 C2 Na1 74.79(14) 1_555 4_554 n
+Na1 C2 Na1 133.43(5) 1_555 6_554 n
+Na1 C2 Na1 143.256(34) 1_555 -6_455 n
+Na1 C2 Na1 100.89(13) 1_555 103_343 n
+Na1 C2 Na1 78.67(9) 1_555 105_443 n
+Na1 C2 C2 71.628(17) 1_555 103_353 n
+Na1 C2 Na1 78.26(9) 4_554 6_554 n
+Na1 C2 Na1 100.89(13) 4_554 -6_455 n
+Na1 C2 Na1 166.621(13) 4_554 103_343 n
+Na1 C2 Na1 112.64(8) 4_554 105_443 n
+Na1 C2 C2 83.311(7) 4_554 103_353 n
+Na1 C2 Na1 78.67(9) 6_554 -6_455 n
+Na1 C2 Na1 112.64(8) 6_554 103_343 n
+Na1 C2 Na1 77.68(14) 6_554 105_443 n
+Na1 C2 C2 141.16(7) 6_554 103_353 n
+Na1 C2 Na1 74.79(14) -6_455 103_343 n
+Na1 C2 Na1 133.43(5) -6_455 105_443 n
+Na1 C2 C2 71.628(17) -6_465 103_353 n
+Na1 C2 Na1 78.26(9) 103_343 105_443 n
+Na1 C2 C2 83.311(7) 103_353 103_353 n
+Na1 C2 C2 141.16(7) 105_453 103_353 n
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_distance
+_geom_bond_site_symmetry_2
+_geom_bond_publ_flag
+Na1 Na1 3.241(6) 2_545 n
+Na1 Na1 3.241(6) 4_554 n
+Na1 Na1 3.275(6) 7_455 n
+Na1 Na1 3.275(6) 7_555 n
+Na1 Na1 4.114(7) 103_545 n
+Na1 Na1 4.114(7) 103_555 n
+Na1 Na1 3.368(6) 105_545 n
+Na1 Na1 3.368(6) 105_555 n
+Na1 C2 2.728(4) 1_555 n
+Na1 C2 2.6065(33) 2_545 n
+Na1 C2 2.5836(33) -4_545 n
+Na1 C2 2.728(4) -5_555 n
+Na1 C2 2.6065(33) 103_555 n
+Na1 C2 2.5836(33) 106_555 n
+C2 Na1 2.728(4) 1_555 n
+C2 Na1 2.6065(33) 4_554 n
+C2 Na1 2.5836(33) 6_554 n
+C2 Na1 2.728(4) -6_455 n
+C2 Na1 2.6065(33) 103_555 n
+C2 Na1 2.5836(33) 105_555 n
+C2 C2 1.1633(20) 103_555 n
+loop_
+_pd_block_diffractogram_id
+2015-05-07T08:12|NA2TEC2-I4MMM_H_01|James_A._Kaduk|D2

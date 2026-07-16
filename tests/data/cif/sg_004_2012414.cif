@@ -1,0 +1,182 @@
+#------------------------------------------------------------------------------
+#$Date: 2016-02-14 06:40:26 +0200 (Sun, 14 Feb 2016) $
+#$Revision: 176432 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/2/01/24/2012414.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided by IUCr Journals, http://journals.iucr.org/.
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_2012414
+loop_
+_publ_author_name
+'Graetsch, Heribert A.'
+_publ_section_title
+;
+ Monoclinic AlPO~4~ tridymite at 473 and 463K from X-ray powder data
+;
+_journal_issue                   1
+_journal_name_full               'Acta Crystallographica Section C'
+_journal_page_first              i18
+_journal_page_last               i20
+_journal_paper_doi               10.1107/S0108270101015773
+_journal_volume                  58
+_journal_year                    2002
+_chemical_formula_iupac          'Al P O4'
+_chemical_formula_moiety         'O4 P Al'
+_chemical_formula_structural     'Al P O4'
+_chemical_formula_sum            'Al O4 P'
+_chemical_formula_weight         121.95
+_chemical_name_systematic
+;
+aluminium phosphate
+;
+_space_group_IT_number           4
+_symmetry_cell_setting           monoclinic
+_symmetry_space_group_name_Hall  'P 2c'
+_symmetry_space_group_name_H-M   'P 1 1 21'
+_cell_angle_alpha                90.0
+_cell_angle_beta                 90.0
+_cell_angle_gamma                119.6037(3)
+_cell_formula_units_Z            2
+_cell_length_a                   5.0803(2)
+_cell_length_b                   5.0703(2)
+_cell_length_c                   8.2992(3)
+_cell_measurement_temperature    463
+_cell_volume                     185.870(12)
+_computing_cell_refinement       'GSAS (Larson & von Dreele, 1994)'
+_computing_data_collection       'DIFFRAC-AT V3.0 (Reference ?)'
+_computing_data_reduction        GSAS
+_computing_molecular_graphics
+'ORTEP-3 (Farrugia, 1997), WATOMS (Dowty, 1994)'
+_computing_publication_material  'WINWORD 97'
+_computing_structure_refinement  GSAS
+_computing_structure_solution    GSAS
+_diffrn_ambient_temperature      473
+_diffrn_measurement_device_type  'Siemens D5000'
+_diffrn_radiation_monochromator  'focussing primary Ge(111) monochromator'
+_diffrn_radiation_type           CuK\a
+_diffrn_radiation_wavelength     1.54056
+_exptl_absorpt_coefficient_mu    7.9
+_exptl_absorpt_correction_type   none
+_exptl_crystal_density_diffrn    2.1790(10)
+_exptl_crystal_density_method    'not measured'
+_exptl_crystal_F_000             120
+_refine_ls_extinction_method     none
+_refine_ls_goodness_of_fit_all   1.38
+_refine_ls_hydrogen_treatment    none
+_refine_ls_matrix_type           fullcycle
+_refine_ls_number_constraints    24
+_refine_ls_number_parameters     77
+_refine_ls_shift/su_max          .01
+_refine_ls_structure_factor_coef Inet
+_refine_ls_weighting_details     'w = 1/[y(obs)]^1/2^'
+_refine_ls_weighting_scheme      calc
+_cod_data_source_file            br1343.cif
+_cod_data_source_block           II
+_cod_original_cell_volume        185.868(13)
+_cod_original_sg_symbol_Hall     'P 1 1 2~c~'
+_cod_original_sg_symbol_H-M      'P 1 1 2~1~'
+_cod_database_code               2012414
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+1 x,y,z
+2 -x,-y,1/2+z
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Al .039(5) .040(5) .051(4) .012(7) -.022(7) -.016(8)
+P .042(4) .038(4) .033(4) .020(3) .007(6) .002(6)
+O1 .130(10) .15(2) .014(4) .070(7) .03(2) .00(2)
+O2 .18(2) .06(2) .05(2) .06(2) .03(2) .020(10)
+O3 .030(10) .12(2) .17(2) .020(10) -.050(10) -.04(2)
+O4 .16(2) .13(2) .12(2) .13(2) .01(2) -.02(2)
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_U_iso_or_equiv
+_atom_site_thermal_displace_type
+_atom_site_occupancy
+_atom_site_type_symbol
+Al .3515(13) .6324(11) .06250 .040(10) Uani 1 Al
+P .3152(12) .7015(11) .4368(4) .040(10) Uani 1 P
+O1 .3347(16) .6661(18) .2616(5) .100(10) Uani 1 O
+O2 .537(3) -.027(2) -.0237(11) .090(10) Uani 1 O
+O3 .005(2) .443(3) -.0149(13) .130(10) Uani 1 O
+O4 .536(3) .441(3) .0247(9) .110(10) Uani 1 O
+loop_
+_atom_type_symbol
+_atom_type_description
+_atom_type_scat_dispersion_real
+_atom_type_scat_dispersion_imag
+_atom_type_scat_source
+Al Al .204 .246 'International Tables for Crystallography (Vol. IV)'
+P P .283 .434 'International Tables for Crystallography (Vol. IV)'
+O O .047 .032 'International Tables for Crystallography (Vol. IV)'
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle_site_symmetry_1
+_geom_angle_site_symmetry_3
+_geom_angle
+_geom_angle_publ_flag
+O1 Al O2 . 1_565 110.6(5) no
+O1 Al O3 . . 110.4(5) no
+O1 Al O4 . . 108.4(4) no
+O2 Al O3 1_565 . 109.2(6) no
+O2 Al O4 1_565 . 109.1(6) no
+O3 Al O4 . . 109.2(6) no
+O1 P O2 . 2_665 109.1(6) no
+O1 P O3 . 2_565 109.4(6) no
+O1 P O4 . 2_665 110.3(5) no
+O2 P O3 2_665 2_565 108.9(7) no
+O2 P O4 2_665 2_665 109.8(7) no
+O3 P O4 2_565 2_665 109.3(7) no
+Al O1 P . . 178.2(5) no
+Al O2 P 1_545 2_664 166.2(7) no
+Al O3 P . 2_564 170.9(8) no
+Al O4 P . 2_664 161.0(6) no
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_site_symmetry_2
+_geom_bond_distance
+_geom_bond_publ_flag
+Al O1 . 1.668(5) no
+Al O2 1_565 1.667(10) no
+Al O3 . 1.662(9) no
+Al O4 . 1.679(11) no
+O1 O2 1_565 2.74(2) no
+O1 O3 . 2.74(2) no
+O1 O4 . 2.71(2) no
+O2 O3 1_545 2.71(2) no
+O2 O4 1_545 2.73(2) no
+O3 O4 . 2.72(2) no
+P O1 . 1.474(6) no
+P O2 2_665 1.473(10) no
+P O3 2_565 1.472(8) no
+P O4 2_665 1.472(10) no
+O1 O2 2_665 2.40(2) no
+O1 O3 2_565 2.41(2) no
+O1 O4 2_665 2.42(2) no
+O2 O3 1_655 2.40(2) no
+O2 O4 . 2.41(2) no
+O3 O4 1_455 2.40(2) no
+Al P . 3.142(4) no
+Al P 2_564 3.124(6) no
+Al P 2_664 3.107(6) no
+Al P 2_674 3.116(7) no

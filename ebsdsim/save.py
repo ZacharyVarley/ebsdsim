@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ebsdsim.elements import element_symbol
-from ebsdsim.pg_ops import fs_normals, pg_num_to_symbol, point_group_operators
+from ebsdsim.pg_ops import fs_normals, folding_symbol, pg_num_to_symbol, point_group_operators
 from ebsdsim.types import Cell
 from ebsdsim.weights import reduce_over_sites, site_weights_from_meta_cell
 
@@ -95,7 +95,7 @@ def cell_metadata(cell: Cell) -> dict[str, Any]:
         "lattice_centering": cell.lattice_centering,
         "space_group": cell.space_group,
         "pg_num": cell.pg_num,
-        "pg_symbol": pg_num_to_symbol(int(cell.pg_num)) if cell.pg_num else None,
+        "pg_symbol": folding_symbol(int(cell.pg_num), cell.space_group) if cell.pg_num else None,
         "average_atomic_number": float(cell.average_atomic_number),
         "average_atomic_weight": float(cell.average_atomic_weight),
         "n_sites": n_sites,
@@ -203,7 +203,7 @@ def save_master_pattern(mp: "MasterPattern", path: str | Path) -> Path:
 
     kij = np.asarray(mp.kij, dtype=np.int32).reshape(n_k, 3)
     khat = np.asarray(mp.khat, dtype=np.float32).reshape(n_k, 3)
-    symbol = pg_num_to_symbol(int(mp.pg_num))
+    symbol = mp.pg_symbol or mp.metadata.get("pg_symbol") or pg_num_to_symbol(int(mp.pg_num))
     ops = point_group_operators(symbol).reshape(-1, 3, 3).astype(np.float64)
     normals = fs_normals(symbol).reshape(-1, 3).astype(np.float64)
 

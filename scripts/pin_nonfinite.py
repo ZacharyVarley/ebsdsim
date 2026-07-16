@@ -6,7 +6,6 @@ import importlib.resources
 
 import numpy as np
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
 from ebsdsim.gpu.buffers import StorageBuffer
 from ebsdsim.integrate import compute_mu_eff
@@ -14,12 +13,12 @@ from ebsdsim.kgrid import build_pg_k_grid, chunk_k_vectors, transform_pg_k_grid_
 from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
 from ebsdsim.runner import plan_safe_chunk_size
 from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 
 
 def main() -> None:
     ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
-    cell = build_cell_from_cif(parse_cif_crystal(ni.read_text(encoding="utf-8")))
+    cell = build_cell_from_cif_path(ni)
     ctx = require_gpu()
     hw = 250
     rank = 20

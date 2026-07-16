@@ -1,0 +1,98 @@
+#------------------------------------------------------------------------------
+#$Date: 2020-11-09 12:59:39 +0200 (Mon, 09 Nov 2020) $
+#$Revision: 259054 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/1/01/00/1010043.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_1010043
+loop_
+_publ_author_name
+'Ott, H.'
+_publ_section_title
+;
+ Die Strukturen von MnO, MnS, AgF, NiS, SnJ4, SrCl2, BaF2;
+ Pr\"azisionsmessungen einiger Alkalihalogenide
+;
+_journal_coden_ASTM              ZEKGAX
+_journal_name_full
+;
+ Zeitschrift f\"ur Kristallographie, Kristallgeometrie, Kristallphysik,
+ Kristallchemie
+;
+_journal_page_first              222
+_journal_page_last               230
+_journal_paper_doi               10.1524/zkri.1926.63.1.222
+_journal_volume                  63
+_journal_year                    1926
+_chemical_formula_structural     'Sn I4'
+_chemical_formula_sum            'I4 Sn'
+_chemical_name_systematic        'Tin(IV) tetraiodide'
+_space_group_IT_number           195
+_symmetry_cell_setting           cubic
+_symmetry_Int_Tables_number      195
+_symmetry_space_group_name_Hall  'P 2 2 3'
+_symmetry_space_group_name_H-M   'P 2 3'
+_cell_angle_alpha                90
+_cell_angle_beta                 90
+_cell_angle_gamma                90
+_cell_formula_units_Z            1
+_cell_length_a                   6.12(5)
+_cell_length_b                   6.12(5)
+_cell_length_c                   6.12(5)
+_cell_volume                     229.2
+_cod_depositor_comments
+;
+ Marked entry as being related to AMCSD entry 0016979.
+
+ Antanas Vaitkus,
+ 2020-11-09
+
+ Updated bibliographic information.
+
+ Antanas Vaitkus,
+ 2020-11-09
+;
+_cod_database_code               1010043
+loop_
+_symmetry_equiv_pos_as_xyz
+x,y,z
+y,z,x
+z,x,y
+x,-y,-z
+y,-z,-x
+z,-x,-y
+-x,y,-z
+-y,z,-x
+-z,x,-y
+-x,-y,z
+-y,-z,x
+-z,-x,y
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_Wyckoff_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_attached_hydrogens
+_atom_site_calc_flag
+Sn1 Sn4+ 1 a 0. 0. 0. 1. 0 d
+I1 I1- 4 e 0.25 0.25 0.25 1. 0 d
+loop_
+_atom_type_symbol
+_atom_type_oxidation_number
+Sn4+ 4.000
+I1- -1.000
+loop_
+_cod_related_entry_id
+_cod_related_entry_database
+_cod_related_entry_code
+1 AMCSD 0016979

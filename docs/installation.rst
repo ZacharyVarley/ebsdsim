@@ -5,12 +5,12 @@ Requirements
 ------------
 
 - Python 3.10 – 3.13
-- NumPy ≥ 1.21, `PyCifRW <https://pypi.org/project/PyCifRW/>`_ ≥ 5.0,
-  `wgpu <https://pypi.org/project/wgpu/>`_ ≥ 0.29
+- NumPy ≥ 1.21, `wgpu <https://pypi.org/project/wgpu/>`_ ≥ 0.29
 - WebGPU adapter to run simulations
 
-CIF files are read with PyCifRW (Hermann–Mauguin symbols and mixed-case tags are
-accepted). GPU setup — drivers, headless Linux, cloud VMs — follows the
+CIF files are standardized to the International Tables setting on load via the
+vendored ``cif_reader`` package (dual-origin groups use origin choice 2).
+GPU setup — drivers, headless Linux, cloud VMs — follows the
 `wgpu-py installation guide <https://wgpu-py.readthedocs.io/en/stable/start.html#install-with-pip>`_.
 
 Loading saved ``.npz`` files via :mod:`ebsdsim.mploader` needs only NumPy.

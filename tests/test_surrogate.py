@@ -7,15 +7,14 @@ import importlib.resources
 import numpy as np
 
 from ebsdsim.binning import dynamical_voltages_kv
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.integrate import surrogate_to_multi_voltage_mc
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 from ebsdsim.surrogate import SurrogateDirectExp, get_surrogate_model, infer_direct_exp_from_cell_rebinned
 
 
 def _ni_cell():
-    text = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif").read_text()
-    return build_cell_from_cif(parse_cif_crystal(text))
+    path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
+    return build_cell_from_cif_path(str(path))
 
 
 def test_surrogate_load_and_infer_ni():

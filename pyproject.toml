@@ -36,7 +36,6 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.21",
-  "PyCifRW>=5.0",
   "wgpu>=0.29",
 ]
 
@@ -66,7 +65,7 @@ version = { attr = "ebsdsim._version.__version__" }
 include = ["ebsdsim*"]
 
 [tool.setuptools.package-data]
-ebsdsim = ["wgsl/*.wgsl", "data/**/*"]
+ebsdsim = ["wgsl/*.wgsl", "data/**/*", "cif_reader/*.npz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,8 +6,7 @@ import importlib.resources
 import time
 
 from ebsdsim.api import _run_master_pattern
-from ebsdsim.cif import parse_cif_crystal
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 
 _last = time.perf_counter()
 
@@ -21,7 +20,7 @@ def _bin_cb(bin_index: int, total_bins: int, voltage_kv: float) -> None:
 
 def main() -> None:
     gan = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif")
-    cell = build_cell_from_cif(parse_cif_crystal(gan.read_text(encoding="utf-8")))
+    cell = build_cell_from_cif_path(gan)
     print("GaN 501x501 — first 2 bins, dmin=0.05, energy_binwidth_keV=1.0")
     global _last
     _last = time.perf_counter()

@@ -146,10 +146,10 @@ def _orbit_fs_representative_array(
     return transformed[np.arange(dirs.shape[0]), best, :]
 
 
-def _build_pixel_source_map(hw: int, southern: bool, pg_num: int) -> PixelSourceMap:
+def _build_pixel_source_map(hw: int, southern: bool, symbol: str) -> PixelSourceMap:
     side = 2 * hw + 1
-    ops = point_group_operators(pg_num_to_symbol(pg_num))
-    normals = fs_normals(pg_num_to_symbol(pg_num))
+    ops = point_group_operators(symbol)
+    normals = fs_normals(symbol)
     eps = 1.0 / hw
     coords = np.linspace(-1.0, 1.0, side, dtype=np.float64)
     xx, yy = np.meshgrid(coords, coords)
@@ -170,11 +170,16 @@ def _build_pixel_source_map(hw: int, southern: bool, pg_num: int) -> PixelSource
     return PixelSourceMap(side=side, src_x=src_x, src_y=src_y, from_sh=from_sh)
 
 
+def _grid_symbol(grid: PgKGrid) -> str:
+    return grid.symbol or pg_num_to_symbol(grid.pg_num)
+
+
 def build_rasterize_pixel_maps(grid: PgKGrid) -> RasterizePixelMaps:
+    symbol = _grid_symbol(grid)
     return RasterizePixelMaps(
         side=grid.side,
-        nh=_build_pixel_source_map(grid.hw, False, grid.pg_num),
-        sh=None if grid.is_centro else _build_pixel_source_map(grid.hw, True, grid.pg_num),
+        nh=_build_pixel_source_map(grid.hw, False, symbol),
+        sh=None if grid.is_centro else _build_pixel_source_map(grid.hw, True, symbol),
     )
 
 
@@ -284,14 +289,15 @@ def rasterize_pattern(
             return np.clip(arr, 0.0, 1.0).astype(np.float32, copy=False)
         return arr.astype(np.float32, copy=False)
 
-    nh_map = _build_pixel_source_map(hw, False, grid.pg_num)
+    symbol = _grid_symbol(grid)
+    nh_map = _build_pixel_source_map(hw, False, symbol)
     nh_from_nh = _sample_sheet_array(sheet_nh, side, nh_map.src_x, nh_map.src_y, options.interp_mode)
     if grid.is_centro:
         nh = _maybe_clip(nh_from_nh)
         return RasterizedPattern(nh=nh, sh=nh.copy(), side=side)
     nh_from_sh = _sample_sheet_array(sheet_sh, side, nh_map.src_x, nh_map.src_y, options.interp_mode)
     nh = _maybe_clip(np.where(nh_map.from_sh != 0, nh_from_sh, nh_from_nh).astype(np.float32))
-    sh_map = _build_pixel_source_map(hw, True, grid.pg_num)
+    sh_map = _build_pixel_source_map(hw, True, symbol)
     sh_from_nh = _sample_sheet_array(sheet_nh, side, sh_map.src_x, sh_map.src_y, options.interp_mode)
     sh_from_sh = _sample_sheet_array(sheet_sh, side, sh_map.src_x, sh_map.src_y, options.interp_mode)
     sh = _maybe_clip(np.where(sh_map.from_sh != 0, sh_from_sh, sh_from_nh).astype(np.float32))

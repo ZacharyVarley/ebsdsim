@@ -1,0 +1,100 @@
+#------------------------------------------------------------------------------
+#$Date: 2019-05-14 07:33:41 +0300 (Tue, 14 May 2019) $
+#$Revision: 215128 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/2/02/16/2021616.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided by IUCr Journals, http://journals.iucr.org/.
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_2021616
+loop_
+_publ_author_name
+'Spahr, Dominik'
+'Bayarjargal, Lkhamsuren'
+'Vinograd, Victor'
+'Luchitskaia, Rita'
+'Milman, Victor'
+'Winkler, Bj\"orn'
+_publ_section_title
+;
+ A new BaCa(CO3)2 polymorph
+;
+_journal_coeditor_code           RA5050SUP1
+_journal_issue                   3
+_journal_name_full
+'Acta Crystallographica Section B Structural Science, Crystal Engineering and Materials'
+_journal_paper_doi               10.1107/S2052520619003238
+_journal_volume                  75
+_journal_year                    2019
+_chemical_formula_structural     'Ba Ca (C O3)2'
+_chemical_formula_sum            'C2 Ba Ca O6'
+_chemical_formula_weight         297.42
+_chemical_name_systematic        'Barium Calcium Carbonate'
+_space_group_IT_number           5
+_space_group_name_Hall           'C 2y'
+_symmetry_cell_setting           monoclinic
+_symmetry_Int_Tables_number      5
+_symmetry_space_group_name_Hall  'C 2y'
+_symmetry_space_group_name_H-M   'C 1 2 1'
+_audit_creation_date             2018-11-08T14:05
+_audit_creation_method           'from EXP file using GSAS2CIF'
+_cell_angle_alpha                90.0
+_cell_angle_beta                 109.2586(13)
+_cell_angle_gamma                90.0
+_cell_formula_units_Z            1
+_cell_length_a                   6.6775(5)
+_cell_length_b                   5.0982(4)
+_cell_length_c                   4.19239(29)
+_cell_measurement_temperature    293(2)
+_cell_volume                     134.736(17)
+_diffrn_ambient_temperature      293(2)
+_diffrn_detector_type            'PANalytical PIXcel3D'
+_diffrn_measurement_device_type  'PANalytical XPert PRO'
+_diffrn_radiation_probe          x-ray
+_diffrn_radiation_type           'Cu K\a'
+_diffrn_radiation_wavelength     1.54056
+_exptl_crystal_density_diffrn    3.6656
+_pd_meas_2theta_range_inc        0.03
+_pd_meas_2theta_range_max        100
+_pd_meas_2theta_range_min        10
+_pd_meas_number_of_points        30464
+_pd_proc_ls_prof_R_factor        0.0602
+_pd_proc_ls_prof_wR_expected     0.0490
+_pd_proc_ls_prof_wR_factor       0.0843
+_refine_ls_R_Fsqd_factor         0.13286
+_cod_data_source_file            ra5050sup1.cif
+_cod_data_source_block           I
+_cod_original_cell_volume        134.734(26)
+_cod_original_sg_symbol_H-M      'C 2'
+_cod_original_formula_sum        'O6 C2 Ba Ca'
+_cod_database_code               2021616
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+1 +x,+y,+z
+2 -x,+y,-z
+101 +x+1/2,+y+1/2,+z
+102 -x+1/2,+y+1/2,-z
+loop_
+_atom_site_type_symbol
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_thermal_displace_type
+_atom_site_U_iso_or_equiv
+_atom_site_symmetry_multiplicity
+O O1 -0.1043(6) 0.50367(24) 0.7367(5) 1.0 Uiso 0.0782(15) 4
+C C3 0.0 0.62590(29) 1.0 1.0 Uiso 0.0582(23) 2
+O O 0.5 0.37224(24) 1.0 1.0 Uiso 0.0782(15) 2
+Ca Ca 0.0 0.1032(14) 0.5 0.5 Uiso 0.04564(27) 2
+Ba Ba 0.0 0.1032(14) 0.5 0.5 Uiso 0.04564(27) 2
+
+_cod_database_fobs_code 2021616

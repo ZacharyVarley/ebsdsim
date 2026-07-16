@@ -11,10 +11,9 @@ from pathlib import Path
 import numpy as np
 
 from ebsdsim.api import _run_master_pattern
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.kgrid import build_pg_k_grid
 from ebsdsim.rasterize import RasterizeOptions, float01_to_uint8, rasterize_pattern
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 
 
 def write_grayscale_png(path: Path, gray: np.ndarray) -> None:
@@ -70,7 +69,7 @@ def main() -> None:
         / "output"
         / (f"ni_master_pattern_lambert_nh_{grid_size}.png" if not args.full else "ni_master_pattern_lambert_nh_501.png")
     )
-    cell = build_cell_from_cif(parse_cif_crystal(ni_cif.read_text(encoding="utf-8")))
+    cell = build_cell_from_cif_path(ni_cif)
 
     print(f"Running Ni master pattern ({grid_size}x{grid_size} Lambert NH, app beam cutoffs)...")
     result = _run_master_pattern(

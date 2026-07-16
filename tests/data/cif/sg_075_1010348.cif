@@ -1,0 +1,81 @@
+#------------------------------------------------------------------------------
+#$Date: 2018-07-07 04:59:37 +0300 (Sat, 07 Jul 2018) $
+#$Revision: 208902 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/1/01/03/1010348.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_1010348
+loop_
+_publ_author_name
+'Strada, M'
+_publ_section_title
+;
+Ricerche sulla struttura dei pseudo-alogeni e dei loro composti. - I.
+Tiocianato di tallio
+;
+_journal_coden_ASTM              GCITA9
+_journal_name_full               'Gazzetta Chimica Italiana'
+_journal_page_first              400
+_journal_page_last               409
+_journal_volume                  64
+_journal_year                    1934
+_chemical_formula_structural     'Tl S C N'
+_chemical_formula_sum            'C N S Tl'
+_chemical_name_systematic        'Thallium thiocyanate'
+_space_group_IT_number           75
+_symmetry_cell_setting           tetragonal
+_symmetry_Int_Tables_number      75
+_symmetry_space_group_name_Hall  'P 4'
+_symmetry_space_group_name_H-M   'P 4'
+_cell_angle_alpha                90
+_cell_angle_beta                 90
+_cell_angle_gamma                90
+_cell_formula_units_Z            1
+_cell_length_a                   4.766
+_cell_length_b                   4.766
+_cell_length_c                   3.78
+_cell_volume                     85.9
+_exptl_crystal_density_meas      4.92
+_cod_depositor_comments
+;
+ Correcting the summary chemical formula by changing it from 'N S Tl'
+ to 'C N S Tl'.
+
+ Antanas Vaitkus,
+ 2018-07-07
+;
+_cod_database_code               1010348
+loop_
+_symmetry_equiv_pos_as_xyz
+x,y,z
+-x,-y,z
+y,-x,z
+-y,x,z
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_Wyckoff_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_attached_hydrogens
+_atom_site_calc_flag
+Tl1 Tl1+ 1 a 0. 0. 0. 1. 0 d
+C1 C4+ 1 b 0.5 0.5 0.29 1. 0 d
+S1 S2- 1 b -1. -1. -1. 1. 0 dum
+N1 N3- 1 b -1. -1. -1. 1. 0 dum
+loop_
+_atom_type_symbol
+_atom_type_oxidation_number
+Tl1+ 1.000
+C4+ 4.000
+S2- -2.000
+N3- -3.000

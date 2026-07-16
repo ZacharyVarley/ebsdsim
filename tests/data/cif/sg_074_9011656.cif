@@ -1,0 +1,79 @@
+#------------------------------------------------------------------------------
+#$Date: 2024-05-16 09:36:09 +0300 (Thu, 16 May 2024) $
+#$Revision: 291877 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/9/01/16/9011656.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided the American Mineralogist Crystal Structure Database,
+# http://rruff.geo.arizona.edu/AMS/amcsd.php
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_9011656
+loop_
+_publ_author_name
+'McMahon, M. I.'
+'Nelmes, R. J.'
+_publ_section_title
+;
+ New high-pressure phase of Si
+ Sample: structure exists between 13 GPa to 18 GPa
+ Note: intermediate structure between those of Si II and Si V
+;
+_journal_name_full               'Physical Review B'
+_journal_page_first              8337
+_journal_page_last               8340
+_journal_paper_doi               10.1103/PhysRevB.47.8337
+_journal_volume                  47
+_journal_year                    1993
+_chemical_compound_source        Synthetic
+_chemical_formula_sum            Si
+_chemical_name_common            Silicon
+_chemical_name_mineral           Silicon
+_space_group_IT_number           74
+_symmetry_space_group_name_Hall  '-I 2b 2'
+_symmetry_space_group_name_H-M   'I m m a'
+_cell_angle_alpha                90
+_cell_angle_beta                 90
+_cell_angle_gamma                90
+_cell_length_a                   4.737
+_cell_length_b                   4.502
+_cell_length_c                   2.550
+_cell_formula_units_Z            4
+_cell_volume                     54.381
+_database_code_amcsd             0015170
+_exptl_crystal_density_diffrn    3.430
+_cod_database_code               9011656
+loop_
+_space_group_symop_operation_xyz
+x,y,z
+1/2+x,1/2+y,1/2+z
+x,1/2-y,z
+1/2+x,-y,1/2+z
+-x,1/2+y,-z
+1/2-x,+y,1/2-z
+-x,y,z
+1/2-x,1/2+y,1/2+z
+x,-y,-z
+1/2+x,1/2-y,1/2-z
+x,1/2+y,-z
+1/2+x,+y,1/2-z
+-x,1/2-y,z
+1/2-x,-y,1/2+z
+-x,-y,-z
+1/2-x,1/2-y,1/2-z
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Si 0.00000 0.25000 0.19300
+loop_
+_cod_related_entry_id
+_cod_related_entry_database
+_cod_related_entry_code
+1 AMCSD 0015170

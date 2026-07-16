@@ -1,15 +1,17 @@
-"""Build simulation cells from parsed CIF crystals."""
+"""Build simulation cells from CIF structures and material specs."""
 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ebsdsim.cif import CIFCrystal
+from ebsdsim.cif import ATOMIC_NUMBERS, CIFCrystal, clean_symbol, load_structure
+from ebsdsim.cif_reader import Structure
 from ebsdsim.elements import atomic_weight
-from ebsdsim.spacegroup import expand_sg_orbit, pg_from_sg
+from ebsdsim.spacegroup import expand_orbit_with_ops, expand_sg_orbit, ops_from_hall, pg_from_sg
 from ebsdsim.types import Cell, LatticeCentering
 
 Vec3 = tuple[float, float, float]
@@ -18,6 +20,7 @@ _DEG = math.pi / 180
 _ANGSTROM_TO_NM = 0.1
 _ANGSTROM_SQ_TO_NM_SQ = 0.01
 _UNIQUE_POSITION_EPS = 1e-4
+_UISO_TO_BISO = 8.0 * math.pi * math.pi
 
 _SG_CENTERING: list[LatticeCentering] = ["P"] * 231
 
@@ -125,52 +128,73 @@ def _unique_positions(positions: list[Vec3]) -> list[Vec3]:
     return out
 
 
-def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
-    a = crystal.a * _ANGSTROM_TO_NM
-    b = crystal.b * _ANGSTROM_TO_NM
-    c = crystal.c * _ANGSTROM_TO_NM
-    alpha = crystal.alpha * _DEG
-    beta = crystal.beta * _DEG
-    gamma = crystal.gamma * _DEG
+def _lattice_arrays(
+    a_A: float,
+    b_A: float,
+    c_A: float,
+    alpha_deg: float,
+    beta_deg: float,
+    gamma_deg: float,
+) -> tuple[float, float, float, float, NDArray[np.float64], NDArray[np.float64]]:
+    a = a_A * _ANGSTROM_TO_NM
+    b = b_A * _ANGSTROM_TO_NM
+    c = c_A * _ANGSTROM_TO_NM
+    alpha = alpha_deg * _DEG
+    beta = beta_deg * _DEG
+    gamma = gamma_deg * _DEG
     ca = math.cos(alpha)
     cb = math.cos(beta)
     cg = math.cos(gamma)
-    direct = np.array([
-        a * a, a * b * cg, a * c * cb,
-        a * b * cg, b * b, b * c * ca,
-        a * c * cb, b * c * ca, c * c,
-    ], dtype=np.float64)
+    direct = np.array(
+        [
+            a * a,
+            a * b * cg,
+            a * c * cb,
+            a * b * cg,
+            b * b,
+            b * c * ca,
+            a * c * cb,
+            b * c * ca,
+            c * c,
+        ],
+        dtype=np.float64,
+    )
     volume = a * b * c * math.sqrt(max(1 + 2 * ca * cb * cg - ca * ca - cb * cb - cg * cg, 0))
     sg = math.sin(gamma)
-    direct_structure_matrix = np.array([
-        a, b * cg, c * cb,
-        0, b * sg, -c * (cb * cg - ca) / sg,
-        0, 0, volume / (a * b * sg),
-    ], dtype=np.float64)
+    direct_structure_matrix = np.array(
+        [
+            a,
+            b * cg,
+            c * cb,
+            0,
+            b * sg,
+            -c * (cb * cg - ca) / sg,
+            0,
+            0,
+            volume / (a * b * sg),
+        ],
+        dtype=np.float64,
+    )
+    return a, b, c, volume, direct, direct_structure_matrix
 
-    space_group = crystal.space_group
-    if not isinstance(space_group, int) or not (1 <= space_group <= 230):
-        if crystal.hm_symbol:
-            from ebsdsim.material import resolve_space_group
 
-            space_group, _ = resolve_space_group(crystal.hm_symbol)
-
-    atom_types = np.array([site.atomic_number for site in crystal.atom_sites], dtype=np.int32)
-    atom_data = np.zeros((len(crystal.atom_sites), 5), dtype=np.float64)
-    positions: list[list[Vec3]] = []
-    use_sg_ops = isinstance(space_group, int) and 1 <= space_group <= 230
-
-    for i, site in enumerate(crystal.atom_sites):
-        atom_data[i, 0:3] = site.fract
-        atom_data[i, 3] = site.occupancy
-        atom_data[i, 4] = site.b_iso * _ANGSTROM_SQ_TO_NM_SQ
-        if use_sg_ops:
-            orbit = expand_sg_orbit(space_group, site.fract)
-        else:
-            ops = crystal.sym_ops if crystal.sym_ops else ["x,y,z"]
-            orbit = _unique_positions([_apply_sym_op(op, site.fract) for op in ops])
-        positions.append(orbit)
-
+def _finalize_cell(
+    *,
+    a: float,
+    b: float,
+    c: float,
+    alpha: float,
+    beta: float,
+    gamma: float,
+    volume: float,
+    direct: NDArray[np.float64],
+    direct_structure_matrix: NDArray[np.float64],
+    atom_types: NDArray[np.int32],
+    atom_data: NDArray[np.float64],
+    positions: list[list[Vec3]],
+    space_group: int | None,
+    hm_symbol: str | None,
+) -> Cell:
     multiplicities = np.array([len(p) for p in positions], dtype=np.int32)
 
     m_sum = 0.0
@@ -200,9 +224,9 @@ def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
         a=a,
         b=b,
         c=c,
-        alpha=crystal.alpha,
-        beta=crystal.beta,
-        gamma=crystal.gamma,
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
         volume=volume,
         direct_structure_matrix=direct_structure_matrix,
         reciprocal_metric=_inv3(direct),
@@ -215,8 +239,118 @@ def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
         density=density,
         average_atomic_number=average_atomic_number,
         average_atomic_weight=average_atomic_weight,
-        lattice_centering=infer_centering(crystal.hm_symbol, space_group),
+        lattice_centering=infer_centering(hm_symbol, space_group),
     )
+
+
+def build_cell_from_structure(structure: Structure) -> Cell:
+    """Build an internal :class:`~ebsdsim.types.Cell` from an IT-standard Structure.
+
+    Expands sites with Hall operators for ``structure.number`` (origin 2 for
+    dual-origin groups). Does not re-apply ``structure.setting``.
+    """
+    a_A, b_A, c_A, alpha, beta, gamma = (float(x) for x in structure.cell)
+    a, b, c, volume, direct, dsm = _lattice_arrays(a_A, b_A, c_A, alpha, beta, gamma)
+
+    space_group = int(structure.number)
+    if not (1 <= space_group <= 230):
+        raise ValueError(f"Structure space group {space_group} out of range")
+
+    coords = np.asarray(structure.coords, dtype=np.float64).reshape(-1, 3)
+    occ = np.asarray(structure.occupancies, dtype=np.float64).reshape(-1)
+    uiso = np.asarray(structure.uiso, dtype=np.float64).reshape(-1)
+    n_sites = coords.shape[0]
+    if len(structure.species) != n_sites:
+        raise ValueError("Structure species/coords length mismatch")
+
+    symbols = [clean_symbol(str(sym)) for sym in structure.species]
+    atom_types = np.array([ATOMIC_NUMBERS[s] for s in symbols], dtype=np.int32)
+    atom_data = np.zeros((n_sites, 5), dtype=np.float64)
+    atom_data[:, 0:3] = coords
+    atom_data[:, 3] = occ
+    atom_data[:, 4] = (uiso * _UISO_TO_BISO) * _ANGSTROM_SQ_TO_NM_SQ
+
+    hall_ops_flat = ops_from_hall(space_group)
+    positions = [
+        expand_orbit_with_ops(
+            hall_ops_flat,
+            (float(coords[i, 0]), float(coords[i, 1]), float(coords[i, 2])),
+        )
+        for i in range(n_sites)
+    ]
+
+    return _finalize_cell(
+        a=a,
+        b=b,
+        c=c,
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        volume=volume,
+        direct=direct,
+        direct_structure_matrix=dsm,
+        atom_types=atom_types,
+        atom_data=atom_data,
+        positions=positions,
+        space_group=space_group,
+        hm_symbol=None,
+    )
+
+
+def build_cell_from_cif(crystal: CIFCrystal) -> Cell:
+    """Build a cell from a synthetic :class:`~ebsdsim.cif.CIFCrystal` (Material path).
+
+    Uses :func:`~ebsdsim.spacegroup.expand_sg_orbit` / ``SG_OP_DATA``.  Real CIF
+    files should go through :func:`build_cell_from_structure` instead.
+    """
+    a, b, c, volume, direct, dsm = _lattice_arrays(
+        crystal.a, crystal.b, crystal.c, crystal.alpha, crystal.beta, crystal.gamma
+    )
+
+    space_group = crystal.space_group
+    if not isinstance(space_group, int) or not (1 <= space_group <= 230):
+        if crystal.hm_symbol:
+            from ebsdsim.material import resolve_space_group
+
+            space_group, _ = resolve_space_group(crystal.hm_symbol)
+
+    atom_types = np.array([site.atomic_number for site in crystal.atom_sites], dtype=np.int32)
+    atom_data = np.zeros((len(crystal.atom_sites), 5), dtype=np.float64)
+    positions: list[list[Vec3]] = []
+    use_sg_ops = isinstance(space_group, int) and 1 <= space_group <= 230
+
+    for i, site in enumerate(crystal.atom_sites):
+        atom_data[i, 0:3] = site.fract
+        atom_data[i, 3] = site.occupancy
+        atom_data[i, 4] = site.b_iso * _ANGSTROM_SQ_TO_NM_SQ
+        if use_sg_ops:
+            orbit = expand_sg_orbit(space_group, site.fract)
+        else:
+            ops = crystal.sym_ops if crystal.sym_ops else ["x,y,z"]
+            orbit = _unique_positions([_apply_sym_op(op, site.fract) for op in ops])
+        positions.append(orbit)
+
+    return _finalize_cell(
+        a=a,
+        b=b,
+        c=c,
+        alpha=crystal.alpha,
+        beta=crystal.beta,
+        gamma=crystal.gamma,
+        volume=volume,
+        direct=direct,
+        direct_structure_matrix=dsm,
+        atom_types=atom_types,
+        atom_data=atom_data,
+        positions=positions,
+        space_group=space_group,
+        hm_symbol=crystal.hm_symbol,
+    )
+
+
+def build_cell_from_cif_path(path: str | Path) -> Cell:
+    """Load a CIF path via :func:`ebsdsim.cif.load_structure` and build a cell."""
+    return build_cell_from_structure(load_structure(path))
 
 
 def metric_to_float32(cell: Cell) -> NDArray[np.float32]:

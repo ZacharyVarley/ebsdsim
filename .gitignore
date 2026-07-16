@@ -8,6 +8,8 @@ build/
 .mypy_cache/
 *.npz
 !ebsdsim/data/lightweight_hist_surrogate.npz
+!ebsdsim/cif_reader/_settings.npz
+!ebsdsim/cif_reader/_descent.npz
 
 /ebsdsimgui/
 /ebsdsim-web/

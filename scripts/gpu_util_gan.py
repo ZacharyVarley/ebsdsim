@@ -9,8 +9,7 @@ import threading
 import time
 
 from ebsdsim.api import _run_master_pattern
-from ebsdsim.cif import parse_cif_crystal
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 import ebsdsim.runner as runner
 
 SAMPLE_MS = 200
@@ -63,7 +62,7 @@ def main() -> None:
         bin_starts.append(time.perf_counter() - t_run0)
 
     cif_path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs", f"{PRESET}.cif")
-    cell = build_cell_from_cif(parse_cif_crystal(cif_path.read_text(encoding="utf-8")))
+    cell = build_cell_from_cif_path(cif_path)
 
     print(f"{PRESET} {2 * HALFW + 1}x{2 * HALFW + 1}  dmin={DMIN}  max_bins={MAX_BINS}")
     print(f"GPU samples every {SAMPLE_MS} ms via nvidia-smi")

@@ -1,0 +1,77 @@
+#------------------------------------------------------------------------------
+#$Date: 2015-01-27 21:58:39 +0200 (Tue, 27 Jan 2015) $
+#$Revision: 130149 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/1/00/40/1004038.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_1004038
+loop_
+_publ_author_name
+'Mairesse, G'
+'Barbier, P'
+'Wignacourt, J P'
+_publ_section_title              'Potassium tetrachloroaluminate'
+_journal_coden_ASTM              ACBCAR
+_journal_name_full               'Acta Crystallographica B (24,1968-38,1982)'
+_journal_page_first              1328
+_journal_page_last               1330
+_journal_paper_doi               10.1107/S0567740878005464
+_journal_volume                  34
+_journal_year                    1978
+_chemical_formula_structural     'K AL CL4'
+_chemical_formula_sum            'Al Cl4 K'
+_chemical_name_systematic        'Potassium tetrachloroaluminate'
+_space_group_IT_number           4
+_symmetry_cell_setting           monoclinic
+_symmetry_Int_Tables_number      4
+_symmetry_space_group_name_Hall  'P 2xa'
+_symmetry_space_group_name_H-M   'P 21 1 1'
+_cell_angle_alpha                93.10(3)
+_cell_angle_beta                 90
+_cell_angle_gamma                90
+_cell_formula_units_Z            4
+_cell_length_a                   10.481(9)
+_cell_length_b                   7.183(5)
+_cell_length_c                   9.273(5)
+_cell_volume                     697.1
+_refine_ls_R_factor_all          0.035
+_cod_database_code               1004038
+loop_
+_symmetry_equiv_pos_as_xyz
+x,y,z
+1/2+x,-y,-z
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_Wyckoff_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_attached_hydrogens
+_atom_site_calc_flag
+Al1 Al3+ 2 a 0.6648 0.0068(5) 0.9336(4) 1. 0 d
+Cl1 Cl1- 2 a 0.8263(5) 0.0263(6) 0.7977(5) 1. 0 d
+Cl2 Cl1- 2 a 0.4914(4) -0.0553(4) 0.8200(3) 1. 0 d
+Cl3 Cl1- 2 a 0.6914(4) -0.2121(4) 0.0782(4) 1. 0 d
+Cl4 Cl1- 2 a 0.6520(5) 0.2656(4) 0.0584(5) 1. 0 d
+Al2 Al3+ 2 a 0.5565(2) 0.4918(5) 0.5641(4) 1. 0 d
+Cl5 Cl1- 2 a 0.3928(5) 0.4697(5) 0.6996(5) 1. 0 d
+Cl6 Cl1- 2 a 0.7230(4) 0.5409(5) 0.6892(4) 1. 0 d
+Cl7 Cl1- 2 a 0.5321(5) 0.7149(4) 0.4255(4) 1. 0 d
+Cl8 Cl1- 2 a 0.5718(5) 0.2341(4) 0.4423(4) 1. 0 d
+K1 K1+ 2 a 0.9178(5) 0.4441(4) 0.9452(5) 1. 0 d
+K2 K1+ 2 a 0.3049(5) 0.0528(5) 0.5566(5) 1. 0 d
+loop_
+_atom_type_symbol
+_atom_type_oxidation_number
+Al3+ 3.000
+Cl1- -1.000
+K1+ 1.000

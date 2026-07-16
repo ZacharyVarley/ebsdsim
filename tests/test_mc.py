@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.gpu import run_monte_carlo_gpu
 from ebsdsim.gpu.device import require_gpu
-from ebsdsim.structure import build_cell_from_cif
+from ebsdsim.structure import build_cell_from_cif_path
 import importlib.resources
 
 
@@ -23,8 +22,8 @@ pytestmark = pytest.mark.skipif(not _gpu_available(), reason="WebGPU adapter una
 
 
 def _ni_cell():
-    text = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif").read_text()
-    return build_cell_from_cif(parse_cif_crystal(text))
+    path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
+    return build_cell_from_cif_path(str(path))
 
 
 def test_mc_returns_normalized_weights():

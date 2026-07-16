@@ -8,7 +8,6 @@ import struct
 import numpy as np
 import pytest
 
-from ebsdsim.cif import parse_cif_crystal
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
 from ebsdsim.gpu.buffers import StorageBuffer
 from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
@@ -19,7 +18,7 @@ from ebsdsim.mploader import build_master_pattern_data
 from ebsdsim.pg_ops import fs_normals, pg_num_to_symbol, point_group_operators
 from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif, metric_to_float32
+from ebsdsim.structure import build_cell_from_cif_path, metric_to_float32
 
 
 def test_lookup_submatrix_uniform_layout():
@@ -58,8 +57,8 @@ pytestmark = pytest.mark.skipif(not _gpu_available(), reason="WebGPU adapter una
 
 
 def _ni_cell():
-    text = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif").read_text()
-    return build_cell_from_cif(parse_cif_crystal(text))
+    path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
+    return build_cell_from_cif_path(str(path))
 
 
 def test_prescan_dispatch():

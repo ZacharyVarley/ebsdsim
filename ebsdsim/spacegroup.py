@@ -9,6 +9,8 @@ from ebsdsim._sg_ops_data import SG_OP_DATA, SG_OP_OFFSETS, SG_PG_FOR_SG
 
 Vec3 = tuple[float, float, float]
 
+_DEN = 24.0
+
 
 def sg_operators(sg: int) -> NDArray[np.float64]:
     if sg < 1 or sg > 230:
@@ -24,6 +26,88 @@ def pg_from_sg(sg: int) -> int:
     return int(SG_PG_FOR_SG[sg - 1])
 
 
+def ops_from_hall(sg: int) -> NDArray[np.float64]:
+    """IT-standard Hall operators as ``(n_op, 12)`` float row-major ``W | t``.
+
+    Translations are ``w / 24`` (Hall denominator). Dual-origin groups use
+    origin choice 2.  Used for CIF ingest; do not mix with :func:`sg_operators`.
+    """
+    if sg < 1 or sg > 230:
+        raise ValueError(f"Space group {sg} out of range")
+    from ebsdsim.cif_reader import STD_HALL, hall_ops
+
+    ops = hall_ops(STD_HALL[sg])
+    w_rot = np.stack([op.W for op in ops], axis=0).astype(np.float64)
+    t = np.stack([op.w for op in ops], axis=0).astype(np.float64) / _DEN
+    mats = np.concatenate([w_rot, t[:, :, None]], axis=2)
+    return mats.reshape(len(ops), 12)
+
+
+def cartesian_point_group_from_sg(
+    sg: int, direct_structure_matrix: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Crystal point group in the Cartesian frame of the given cell.
+
+    Conjugates the IT-standard space-group rotation parts by the direct
+    structure matrix (columns = lattice vectors in Cartesian), then dedups.
+    Returns ``(m, 3, 3)`` rotation matrices (proper and improper).
+    """
+    flat = ops_from_hall(sg).reshape(-1, 3, 4)
+    w_rot = flat[:, :, :3]
+    m = np.asarray(direct_structure_matrix, dtype=np.float64).reshape(3, 3)
+    m_inv = np.linalg.inv(m)
+    r_cart = np.einsum("ij,njk,kl->nil", m, w_rot, m_inv)
+    return _dedup_matrices(r_cart)
+
+
+def _matrix_key_set(mats: NDArray[np.float64], decimals: int = 3) -> set[bytes]:
+    rounded = np.round(np.asarray(mats, dtype=np.float64), decimals) + 0.0
+    return {row.tobytes() for row in rounded.reshape(-1, 9)}
+
+
+def verify_folding_matches_crystal(
+    space_group: int, direct_structure_matrix: NDArray[np.float64]
+) -> str:
+    """Check the Lambert folding point group matches the crystal's real symmetry.
+
+    Derives the crystal's Cartesian point group from its IT-standard space-group
+    operators and compares it, as a set of matrices, to the operators the folding
+    path selects (``folding_symbol`` -> ``point_group_operators``). Raises
+    ``ValueError`` on any mismatch. This is a verification helper used by the test
+    suite to prove the selection is correct for all 230 space groups; it is not
+    called per simulation. Returns the validated folding symbol.
+    """
+    from ebsdsim.pg_ops import folding_symbol, point_group_operators
+
+    pg_num = pg_from_sg(space_group)
+    symbol = folding_symbol(pg_num, space_group)
+    table = point_group_operators(symbol).reshape(-1, 3, 3)
+    crystal = cartesian_point_group_from_sg(space_group, direct_structure_matrix)
+    table_set = _matrix_key_set(table)
+    crystal_set = _matrix_key_set(crystal)
+    if table_set != crystal_set:
+        n_missing = len(crystal_set - table_set)
+        n_extra = len(table_set - crystal_set)
+        raise ValueError(
+            f"Folding point group '{symbol}' (pg {pg_num}) does not match the "
+            f"Cartesian symmetry of space group {space_group}: "
+            f"{n_missing} crystal op(s) absent from the folding set, "
+            f"{n_extra} folding op(s) absent from the crystal. This indicates a "
+            f"point-group orientation/convention mismatch."
+        )
+    return symbol
+
+
+def _dedup_matrices(mats: NDArray[np.float64], tol: float = 1e-4) -> NDArray[np.float64]:
+    mats = np.asarray(mats, dtype=np.float64)
+    if mats.shape[0] == 0:
+        return mats
+    dist = np.abs(mats[:, None] - mats[None]).sum(axis=(2, 3))
+    first_match = np.argmax(dist < tol, axis=1)
+    keep = first_match == np.arange(mats.shape[0])
+    return mats[keep]
+
+
 def _wrap_mod1(v: float, eps: float) -> float:
     x = v
     if abs(x) < eps:
@@ -34,6 +118,35 @@ def _wrap_mod1(v: float, eps: float) -> float:
     if abs(x) < eps:
         x = 0.0
     return x
+
+
+def _wrap_frac_array(xyz: NDArray[np.float64], eps: float) -> NDArray[np.float64]:
+    """Vectorized fractional wrap matching :func:`_wrap_mod1`."""
+    out = np.asarray(xyz, dtype=np.float64).copy()
+    out[np.abs(out) < eps] = 0.0
+    out = np.mod(out, 1.0)
+    out[np.abs(out - 1.0) < eps] = 0.0
+    out[np.abs(out) < eps] = 0.0
+    return out
+
+
+def expand_orbit_with_ops(
+    ops: NDArray[np.float64],
+    pos: Vec3 | NDArray[np.float64],
+    eps: float = 1e-4,
+) -> list[Vec3]:
+    """Expand one site under packed ``(n_op, 12)`` or flat ``(n_op*12,)`` ops."""
+    packed = np.asarray(ops, dtype=np.float64).reshape(-1, 12)
+    p = np.asarray(pos, dtype=np.float64).reshape(3)
+    w = packed[:, [0, 1, 2, 4, 5, 6, 8, 9, 10]].reshape(-1, 3, 3)
+    t = packed[:, [3, 7, 11]]
+    xyz = _wrap_frac_array(np.einsum("nij,j->ni", w, p) + t, eps)
+    if xyz.size == 0:
+        return []
+    keys = np.round(xyz / eps).astype(np.int64)
+    _, idx = np.unique(keys, axis=0, return_index=True)
+    uniq = xyz[np.sort(idx)]
+    return [(float(r[0]), float(r[1]), float(r[2])) for r in uniq]
 
 
 def expand_sg_orbit(sg: int, pos: Vec3, eps: float = 1e-4) -> list[Vec3]:
