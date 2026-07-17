@@ -177,14 +177,25 @@ class DiffLookupGeometry:
     species_thermal_sigma: list[float]
 
 
-def _stack_site_positions(cell: Cell) -> tuple[NDArray[np.float64], int]:
+def _stack_site_positions(cell: Cell) -> tuple[NDArray[np.float64], NDArray[np.bool_]]:
+    """Stack per-site orbits into a dense ``(n_sites, max_pos, 3)`` array.
+
+    Returns a boolean mask of real orbit members. Callers **must** apply the mask
+    when summing phases: zero-padded slots are ``(0,0,0)`` and would otherwise
+    contribute ``cos(0)=1`` phantom atoms at the origin (inflating |U| for cells
+    with unequal site multiplicities).
+    """
     n_sites = cell.atom_types.size
     max_pos = max((len(cell.positions[s]) for s in range(n_sites)), default=0)
-    pos = np.zeros((n_sites, max(max_pos, 1), 3), dtype=np.float64)
+    max_pos = max(max_pos, 1)
+    pos = np.zeros((n_sites, max_pos, 3), dtype=np.float64)
+    valid = np.zeros((n_sites, max_pos), dtype=bool)
     for site in range(n_sites):
+        n = len(cell.positions[site])
         for p, xyz in enumerate(cell.positions[site]):
             pos[site, p] = xyz
-    return pos, max_pos
+        valid[site, :n] = True
+    return pos, valid
 
 
 def prepare_diff_lookup_geometry(cell: Cell, dmin: float) -> DiffLookupGeometry:
@@ -204,7 +215,7 @@ def prepare_diff_lookup_geometry(cell: Cell, dmin: float) -> DiffLookupGeometry:
     site_occ = cell.atom_data[:, 3]
     site_b_iso = cell.atom_data[:, 4]
     site_thermal_sigma = np.maximum(1e-7, 10 * np.sqrt(np.maximum(site_b_iso, 0) / (8 * PI * PI)))
-    site_pos, _ = _stack_site_positions(cell)
+    site_pos, site_valid = _stack_site_positions(cell)
     species_index_by_key: dict[str, int] = {}
     site_species = np.zeros(n_sites, dtype=np.int32)
     species_z: list[int] = []
@@ -234,8 +245,9 @@ def prepare_diff_lookup_geometry(cell: Cell, dmin: float) -> DiffLookupGeometry:
         + h_diff[:, None, None, 1] * site_pos[None, :, :, 1]
         + h_diff[:, None, None, 2] * site_pos[None, :, :, 2]
     )
-    row_phase_re = np.cos(ang).sum(axis=2)
-    row_phase_im = np.sin(ang).sum(axis=2)
+    # Mask padded orbit slots — zeros would sum as phantom atoms at the origin.
+    row_phase_re = (np.cos(ang) * site_valid[None, :, :]).sum(axis=2)
+    row_phase_im = (np.sin(ang) * site_valid[None, :, :]).sum(axis=2)
 
     h_refl = hkl.reshape(-1, 3)
     hkl_hash = (

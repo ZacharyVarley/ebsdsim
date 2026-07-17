@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from ebsdsim.cif import ATOMIC_NUMBERS, CIFCrystal, clean_symbol, load_structure
+from ebsdsim.cif import ATOMIC_NUMBERS, CIFCrystal, DEFAULT_B_ISO_ANGSTROM_SQ, clean_symbol, load_structure
 from ebsdsim.cif_reader import Structure
 from ebsdsim.elements import atomic_weight
 from ebsdsim.spacegroup import expand_orbit_with_ops, expand_sg_orbit, ops_from_hall, pg_from_sg
@@ -268,7 +268,20 @@ def build_cell_from_structure(structure: Structure) -> Cell:
     atom_data = np.zeros((n_sites, 5), dtype=np.float64)
     atom_data[:, 0:3] = coords
     atom_data[:, 3] = occ
-    atom_data[:, 4] = (uiso * _UISO_TO_BISO) * _ANGSTROM_SQ_TO_NM_SQ
+    # CIF reader stores missing B/U as Uiso=0. Match Material-path / docs default
+    # of 0.5 Å² (0.005 nm²) rather than leaving B=0 (ill-conditioned WK absorption).
+    default_b_nm2 = DEFAULT_B_ISO_ANGSTROM_SQ * _ANGSTROM_SQ_TO_NM_SQ
+    b_from_u = (uiso * _UISO_TO_BISO) * _ANGSTROM_SQ_TO_NM_SQ
+    missing_b = ~np.isfinite(uiso) | (uiso <= 0.0)
+    atom_data[:, 4] = np.where(missing_b, default_b_nm2, b_from_u)
+    if np.any(missing_b):
+        n_miss = int(np.count_nonzero(missing_b))
+        print(
+            f"[ebsdsim] CIF has no usable B_iso/U_iso on {n_miss}/{n_sites} site(s); "
+            f"using default B_iso={DEFAULT_B_ISO_ANGSTROM_SQ} A^2 "
+            f"({default_b_nm2} nm^2) for those sites.",
+            flush=True,
+        )
 
     hall_ops_flat = ops_from_hall(space_group)
     positions = [

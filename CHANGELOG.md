@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-07-16
+
+### Fixed
+
+- Structure-factor (and SGH) phase sums no longer treat zero-padded orbit slots as
+  real atoms at the origin. Dense stacking of per-site orbits left short
+  multiplicities padded with `(0,0,0)`; summing `cos`/`sin` over those pads
+  inflated `|U|`, Bethe beam counts, and dynamical intensities whenever site
+  multiplicities differed within a cell. Equal-multiplicity / single-orbit
+  crystals (e.g. Ni) were unaffected. Present since 0.1.0.
+- `expi_vec` no longer triggers a spurious `log1p` divide-by-zero warning when
+  evaluating the exponential integral for tiny arguments (vectorized `np.where`
+  was computing both branches).
+- CIF ingest now applies the documented default Debye–Waller factor
+  **B_iso = 0.5 Å² (0.005 nm²)** when `_atom_site_B_iso_or_equiv` /
+  `_atom_site_U_iso_or_equiv` are missing or non-positive, matching the Material
+  path. A console message reports how many sites received the default.
+
+### Notes
+
+- Master patterns saved before 0.1.10 for crystals with **unequal** site
+  multiplicities should be regenerated. Equal-multiplicity cells are unchanged.
+  Patterns from CIFs that previously ran with B=0 (no U/B tags) should also be
+  regenerated if Debye–Waller matters for the use case.
+
 ## [0.1.9] - 2026-07-16
 
 ### Changed

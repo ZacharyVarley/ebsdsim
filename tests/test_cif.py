@@ -57,6 +57,25 @@ def test_diff_lookup_finite():
     assert np.isfinite(lookup.mlambda)
 
 
+def test_cif_missing_b_iso_defaults_to_half_angstrom_sq(capsys):
+    """Preset CIFs omit U/B; CIF path must apply the documented 0.5 Å² default."""
+    cell = build_cell_from_cif_path(_ni_cif_path())
+    assert np.allclose(cell.atom_data[:, 4], 0.005)
+    err = capsys.readouterr()
+    assert "default B_iso=0.5" in err.out
+    assert "0.005 nm^2" in err.out
+
+
+def test_cif_explicit_u_iso_is_preserved():
+    path = Path(__file__).resolve().parent / "data" / "cif" / "sg_142_7220794.cif"
+    cell = build_cell_from_cif_path(path)
+    # Fixture sites carry positive Uiso; converted B must not be the missing-tag default.
+    assert not np.allclose(cell.atom_data[:, 4], 0.005)
+    assert np.all(cell.atom_data[:, 4] > 0.0)
+    # Uiso=0.005 Å² → B = 8π²U ≈ 0.3948 Å² → 0.003948 nm² (one site in this CIF).
+    assert any(abs(float(b) - 0.00394784) < 1e-6 for b in cell.atom_data[:, 4])
+
+
 def _fe_gamma_cif_path() -> Path:
     return Path(str(importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Fe_gamma.cif")))
 

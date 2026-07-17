@@ -176,3 +176,47 @@ def test_coupling_candidates_matches_streaming():
         lu.mlambda,
     )
     assert np.max(np.abs(stream - cand)) < 1e-5
+
+
+def test_phase_sum_ignores_padded_orbit_slots():
+    """Unequal multiplicities must not count zero-padded (0,0,0) as real atoms.
+
+    Regression: dense stacking padded short orbits with zeros; summing cos/sin
+    over the pad treated each zero as an atom at the origin and inflated |U|.
+    """
+    from ebsdsim.api import Atom, Cell, Material
+
+    cell = Material(
+        cell=Cell(
+            a=5.64871185,
+            b=5.64871185,
+            c=12.08748583,
+            alpha=90.0,
+            beta=90.0,
+            gamma=120.0,
+            space_group=166,
+        ),
+        atoms=[
+            Atom("B", 0.01013122, 0.50506561, 0.30845848, b_iso=0.5),
+            Atom("B", 0.10535026, 0.21070052, 0.88677738, b_iso=0.5),
+            Atom("B", 0.0, 0.0, 0.5, b_iso=0.5),
+            Atom("C", 0.0, 0.0, 0.38118845, b_iso=0.5),
+        ],
+    ).to_simulation_cell()
+    mults = [len(p) for p in cell.positions]
+    assert max(mults) > min(mults)
+
+    geom = prepare_diff_lookup_geometry(cell, _DMIN)
+    # Scalar reference over real orbit members only.
+    h = geom.hkl_diff.reshape(-1, 3).astype(np.float64)
+    for site, positions in enumerate(cell.positions):
+        xyz = np.asarray(positions, dtype=np.float64)
+        ang = -2 * np.pi * (h @ xyz.T)
+        expect_re = np.cos(ang).sum(axis=1)
+        expect_im = np.sin(ang).sum(axis=1)
+        assert np.allclose(geom.row_phase_re[:, site], expect_re, rtol=0, atol=1e-9)
+        assert np.allclose(geom.row_phase_im[:, site], expect_im, rtol=0, atol=1e-9)
+
+    lu = build_diff_lookup_from_geometry(geom, BuildLookupOptions(voltage_kv=20.0, dmin=_DMIN))
+    # Web reference (ebsdsim-web) coupling ≈ 0.0236 for this crystal @ 20 kV / dmin=0.05.
+    assert abs(float(lu.coupling[0]) - 0.023617) < 5e-4

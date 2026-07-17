@@ -46,14 +46,15 @@ def prepare_site_sgh_tables(cell: Cell, dmin: float) -> SghTableData:
     ).astype(np.intp)
     g = reciprocal_length_batch(hkl_diff, cell.reciprocal_metric)
     s_sq = 0.25 * g * g
-    site_pos, _ = _stack_site_positions(cell)
+    site_pos, site_valid = _stack_site_positions(cell)
     ang = 2 * PI * (
         h[:, None, None, 0] * site_pos[None, :, :, 0]
         + h[:, None, None, 1] * site_pos[None, :, :, 1]
         + h[:, None, None, 2] * site_pos[None, :, :, 2]
     )
-    phase_re = np.cos(ang).sum(axis=2)
-    phase_im = np.sin(ang).sum(axis=2)
+    # Mask padded orbit slots — zeros would sum as phantom atoms at the origin.
+    phase_re = (np.cos(ang) * site_valid[None, :, :]).sum(axis=2)
+    phase_im = (np.sin(ang) * site_valid[None, :, :]).sum(axis=2)
 
     for site in range(n_sites):
         z = int(cell.atom_types[site])

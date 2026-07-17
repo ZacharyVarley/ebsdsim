@@ -204,7 +204,16 @@ def expi_vec(x: NDArray[np.floating]) -> NDArray[np.float64]:
         root = 0.37250741078136663
         t1 = xs / 3 - 1
         t = xs - root
-        correction = np.where(np.abs(t) < 0.1, np.log1p(t / root), np.log(xs / root))
+        # Masked branches: np.where would evaluate log1p(t/root) for xs≈0 where
+        # t/root≈-1, triggering a spurious divide-by-zero warning.
+        correction = np.empty_like(xs)
+        near = np.abs(t) < 0.1
+        if np.any(near):
+            correction[near] = np.log1p(t[near] / root)
+        far = ~near
+        if np.any(far):
+            with np.errstate(divide="ignore", invalid="ignore"):
+                correction[far] = np.log(xs[far] / root)
         chunk[m6] = (_poly_vec(p, t1) / _poly_vec(q, t1)) * t + correction
     m10 = (xp > 6) & (xp <= 10)
     if np.any(m10):
