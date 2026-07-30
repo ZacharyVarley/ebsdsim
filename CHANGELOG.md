@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-30
+
+### Fixed
+
+- Exclude `wgpu==0.32.0`: that upstream release breaks
+  `queue.on_submitted_work_done_sync()` (TypeError from a callback signature
+  mismatch against wgpu-native v27) on every platform, which crashed all GPU
+  entry points on a fresh install. `wgpu>=0.29,!=0.32.0` resolves to a working
+  build until upstream ships a fix.
+
 ## [0.2.0] - 2026-07-30
 
 ### Changed
