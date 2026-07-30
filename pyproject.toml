@@ -50,6 +50,8 @@ Changelog = "https://github.com/ZacharyVarley/ebsdsim/blob/main/CHANGELOG.md"
 dev = [
   "build>=1.0",
   "pytest>=7.0",
+  "import-linter>=2.0",
+  "ruff>=0.6",
 ]
 docs = [
   "sphinx>=7.0",
@@ -65,10 +67,55 @@ version = { attr = "ebsdsim._version.__version__" }
 include = ["ebsdsim*"]
 
 [tool.setuptools.package-data]
-ebsdsim = ["wgsl/*.wgsl", "data/**/*", "cif_reader/*.npz"]
+ebsdsim = [
+  "gpu/shaders/**/*.wgsl",
+  "data/**/*",
+  "crystal/reader/*.npz",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
-markers = ["slow: long GPU end-to-end tests"]
+markers = [
+  "slow: long GPU end-to-end tests",
+  "gpu: tests that require a WebGPU adapter",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["ebsdsim", "tests", "scripts"]
+extend-exclude = [
+  "ebsdsim/crystal/_generated",
+  "examples",
+  "docs",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+# Style target is 100 cols (verified p99≈97); do not fail CI on existing long lines.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Public re-exports: keep unused-import noise off deliberate package surfaces.
+"ebsdsim/__init__.py" = ["F401"]
+"ebsdsim/api.py" = ["F401"]
+"ebsdsim/*/__init__.py" = ["F401"]
+"ebsdsim/*/*/__init__.py" = ["F401"]
+
+[tool.importlinter]
+root_package = "ebsdsim"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = [
+  "ebsdsim.api",
+  "ebsdsim.io",
+  "ebsdsim.engine",
+  "ebsdsim.gpu",
+  "ebsdsim.lambert | ebsdsim.energy",
+  "ebsdsim.physics",
+  "ebsdsim.crystal",
+]
 

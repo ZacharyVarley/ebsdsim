@@ -12,10 +12,9 @@ from __future__ import annotations
 import importlib.resources
 from pathlib import Path
 
-import numpy as np
-
 import ebsdsim as es
-from ebsdsim.mploader import load_master_pattern, save_png_gray, to_uint8
+import numpy as np
+from ebsdsim.io.load import load_master_pattern, save_png_gray, to_uint8
 
 OUT = Path("output")
 OUT.mkdir(exist_ok=True)

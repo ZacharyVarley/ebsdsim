@@ -9,8 +9,9 @@ Two independent checks:
      solid_angle(FS) * n == 4*pi).
 
 2. Convention match (per pg_num 1..32 as production selects it):
-   - the symbol chosen by pg_num_to_symbol + the monoclinic remap yields ops of
-     the expected order and Laue class.
+   - folding_symbol(pg, space_group) + the monoclinic remap yields ops of the
+     expected order and Laue class. Orientation-ambiguous PGs are validated
+     against the crystal via folding_symbol for all 230 SGs.
 
 Run: python -m scripts.verify_pg_ops
 """
@@ -18,9 +19,8 @@ Run: python -m scripts.verify_pg_ops
 from __future__ import annotations
 
 import numpy as np
-
-from ebsdsim._pg_ops_data import FS_NORMALS, PG_NUM_TO_SYMBOL, PG_OPERATORS
-from ebsdsim.pg_ops import fs_normals, point_group_operators
+from ebsdsim.crystal._generated.pg_ops import PG_NUM_TO_SYMBOL
+from ebsdsim.crystal.pointgroup import fs_normals, point_group_operators
 
 RNG = np.random.default_rng(0)
 EPS = 1e-9
@@ -122,8 +122,8 @@ def main() -> None:
 
     print("\n=== Convention match: folding PG vs real crystal symmetry, "
           "all 230 space groups ===")
-    from ebsdsim.spacegroup import verify_folding_matches_crystal
-    from ebsdsim.structure import _lattice_arrays
+    from ebsdsim.crystal.build import _lattice_arrays
+    from ebsdsim.crystal.spacegroup import verify_folding_matches_crystal
 
     def system(sg: int) -> str:
         for hi, name in ((2, "tri"), (15, "mono"), (74, "ortho"), (142, "tetra"),

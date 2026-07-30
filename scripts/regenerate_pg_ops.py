@@ -1,4 +1,4 @@
-"""Regenerate ebsdsim/_pg_ops_data.py from ebsdsim-web/src/pg-ops-data.ts."""
+"""Regenerate ebsdsim/crystal/_generated/pg_ops.py from ebsdsim-web/src/pg-ops-data.ts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TS = ROOT / "ebsdsim-web" / "src" / "pg-ops-data.ts"
-OUT = ROOT / "ebsdsim" / "_pg_ops_data.py"
+OUT = ROOT / "ebsdsim" / "crystal" / "_generated" / "pg_ops.py"
 
 
 def _parse_float64_arrays(block: str) -> dict[str, list[float]]:

@@ -26,7 +26,13 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run CPU tests
-        run: pytest -m "not slow" --ignore=tests/test_save_load.py -q
+        run: pytest -m "not slow and not gpu" -q
+
+      - name: Ruff
+        run: ruff check ebsdsim tests scripts
+
+      - name: Import lint
+        run: lint-imports
 
   test-gpu:
     name: GPU tests (macos, Metal)

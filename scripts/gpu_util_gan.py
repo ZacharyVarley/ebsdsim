@@ -8,9 +8,10 @@ import sys
 import threading
 import time
 
-from ebsdsim.api import _run_master_pattern
-from ebsdsim.structure import build_cell_from_cif_path
-import ebsdsim.runner as runner
+import ebsdsim.engine.runner as runner
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.engine.master_pattern import run_master_pattern
+from ebsdsim.engine.params import SimParams
 
 SAMPLE_MS = 200
 MAX_BINS = 6
@@ -58,7 +59,7 @@ def main() -> None:
     sampler = threading.Thread(target=_gpu_sampler, args=(gpu_samples, stop), daemon=True)
     sampler.start()
 
-    def on_bin(bin_index: int, total_bins: int, voltage_kv: float) -> None:
+    def on_bin(bin_index: int, total_bins: int, voltage_kv: float, _weight: float, _amp: float) -> None:
         bin_starts.append(time.perf_counter() - t_run0)
 
     cif_path = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs", f"{PRESET}.cif")
@@ -69,8 +70,8 @@ def main() -> None:
     print()
 
     t0 = time.perf_counter()
-    _run_master_pattern(
-        cell=cell,
+    # max_bins_run / bin_callback are LU-path only (runner lookup wait sampling).
+    params = SimParams(
         voltage_kv=20.0,
         halfw=HALFW,
         dmin=DMIN,
@@ -78,13 +79,18 @@ def main() -> None:
         n_trajectories=0,
         sigma_deg=70.0,
         omega_deg=0.0,
+        solver="lu_smith",
         rank=20,
         chunk_size=256,
-        mode="bloch",
         marginal_coverage=1.0,
         relative_image_stop=0.0,
         mc_backend="surrogate",
+    )
+    run_master_pattern(
+        cell,
+        params,
         source=f"{PRESET}.cif",
+        mode="bloch",
         max_bins_run=MAX_BINS,
         bin_callback=on_bin,
     )

@@ -1,4 +1,4 @@
-"""WGSL pipeline loading and dispatch helpers."""
+"""GPU layer: WGSL load + compute pipeline cache (paths under gpu/shaders/)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,21 @@ import struct
 from dataclasses import dataclass
 from typing import Any
 
-from wgpu import BufferUsage
-
 from ebsdsim.gpu.buffers import StorageBuffer
-
 
 _WGSL_CACHE: dict[str, str] = {}
 
 
 def load_wgsl(name: str) -> str:
-    """Load a WGSL source file from ``ebsdsim/wgsl/`` (cached after first read)."""
+    """Load a WGSL source file from ``ebsdsim/gpu/shaders/`` (cached after first read).
+
+    ``name`` is a path relative to ``shaders/``, e.g. ``dynamical/excitation_score.wgsl``.
+    """
     cached = _WGSL_CACHE.get(name)
     if cached is not None:
         return cached
-    path = importlib.resources.files("ebsdsim").joinpath("wgsl", name)
+    parts = name.replace("\\", "/").split("/")
+    path = importlib.resources.files("ebsdsim").joinpath("gpu", "shaders", *parts)
     code = path.read_text(encoding="utf-8")
     _WGSL_CACHE[name] = code
     return code
@@ -72,10 +73,42 @@ class PipelineCache:
         self.device = device
         self._pipelines: dict[str, Any] = {}
         self._layouts: dict[str, Any] = {}
+        # Reusable uniform buffers by dispatch label (bind groups stay per-call —
+        # LU chunk workspaces are short-lived and must not be retained in a BG cache).
+        self._params: dict[str, Any] = {}
+        self._param_sizes: dict[str, int] = {}
 
     def clear(self) -> None:
         self._pipelines.clear()
         self._layouts.clear()
+        for buf in self._params.values():
+            buf.destroy()
+        self._params.clear()
+        self._param_sizes.clear()
+
+    def __del__(self) -> None:
+        try:
+            self.clear()
+        except Exception:
+            pass
+
+    def _params_buf(self, label: str, size: int) -> Any:
+        from wgpu import BufferUsage
+
+        size = max(int(size), 16)
+        existing = self._params.get(label)
+        if existing is not None and self._param_sizes[label] >= size:
+            return existing
+        if existing is not None:
+            existing.destroy()
+        buf = self.device.create_buffer(
+            size=size,
+            usage=BufferUsage.UNIFORM | BufferUsage.COPY_DST,
+            label=f"{label}:params",
+        )
+        self._params[label] = buf
+        self._param_sizes[label] = size
+        return buf
 
     def get_pipeline(
         self,
@@ -117,15 +150,18 @@ class PipelineCache:
         uniform_size: int = 16,
         storage_read_only: bool | list[bool] | None = None,
     ) -> None:
+        # One submit per call (callers may read back immediately). Uniform buffers
+        # are reused by label; bind groups are created fresh each call.
+        x, y, z = workgroups
+        if x == 0 or y == 0 or z == 0:
+            return
+
         params_size = max(uniform_size, 16, len(params_data))
-        if len(params_data) < params_size:
-            params_data = bytes(params_data) + b"\x00" * (params_size - len(params_data))
-        params_buf = self.device.create_buffer(
-            size=params_size,
-            usage=BufferUsage.UNIFORM | BufferUsage.COPY_DST,
-            label=f"{label}:params",
-        )
-        queue.write_buffer(params_buf, 0, params_data)
+        pdata = bytes(params_data)
+        if len(pdata) < params_size:
+            pdata = pdata + b"\x00" * (params_size - len(pdata))
+        params_buf = self._params_buf(label, params_size)
+        queue.write_buffer(params_buf, 0, pdata)
 
         pipeline, layout = self.get_pipeline(
             key,
@@ -152,12 +188,9 @@ class PipelineCache:
                 binding = resource
             entries.append({"binding": i + 1, "resource": binding})
 
-        bind_group = self.device.create_bind_group(layout=layout, entries=entries, label=f"{label}:bg")
-        x, y, z = workgroups
-        if x == 0 or y == 0 or z == 0:
-            params_buf.destroy()
-            return
-
+        bind_group = self.device.create_bind_group(
+            layout=layout, entries=entries, label=f"{label}:bg"
+        )
         encoder = self.device.create_command_encoder(label=label)
         pass_ = encoder.begin_compute_pass(label=label)
         pass_.set_pipeline(pipeline)
@@ -165,7 +198,6 @@ class PipelineCache:
         pass_.dispatch_workgroups(x, y, z)
         pass_.end()
         queue.submit([encoder.finish()])
-        params_buf.destroy()
 
 
 def make_mixed_params(size: int, writer) -> bytes:

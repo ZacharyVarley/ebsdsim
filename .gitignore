@@ -6,10 +6,12 @@ dist/
 build/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.import_linter_cache/
 *.npz
 !ebsdsim/data/lightweight_hist_surrogate.npz
-!ebsdsim/cif_reader/_settings.npz
-!ebsdsim/cif_reader/_descent.npz
+!ebsdsim/crystal/reader/_settings.npz
+!ebsdsim/crystal/reader/_descent.npz
 
 /ebsdsimgui/
 /ebsdsim-web/
@@ -19,3 +21,13 @@ build/
 # Editor / OS
 .DS_Store
 Thumbs.db
+
+# AI / editor tooling
+.cursor/
+.claude/
+.aider*
+.continue/
+.codeium/
+.copilot/
+.vscode/
+.idea/

@@ -18,12 +18,16 @@ pip install -e ".[dev,docs]"
 ## Tests
 
 ```bash
-pytest -m "not slow"    # CPU tests; GPU tests skip without an adapter
-pytest -m slow          # end-to-end GPU runs (WebGPU required)
+pytest -m "not slow and not gpu"   # CPU tests
+pytest -m gpu                      # WebGPU unit / integration
+pytest -m slow                     # end-to-end GPU runs
+lint-imports                       # layered import contract
 ```
 
-CI runs CPU tests on Ubuntu (Python 3.11–3.12) and GPU tests on macOS (Metal).
-See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI runs CPU tests + import-linter on Ubuntu (Python 3.11–3.12) and GPU tests on
+macOS (Metal). See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+Package layout and layering: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Documentation
 

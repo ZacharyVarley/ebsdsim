@@ -8,21 +8,24 @@ import pstats
 import time
 from io import StringIO
 
-import numpy as np
-
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.energy.surrogate import infer_direct_exp_from_cell_rebinned
+from ebsdsim.engine.integrate import (
+    next_active_voltage_kv,
+    surrogate_to_multi_voltage_mc,
+    trim_multi_voltage_mc_by_coverage,
+)
+from ebsdsim.engine.runner import plan_safe_chunk_size
 from ebsdsim.gpu.device import require_gpu
 from ebsdsim.gpu.dynamical import EBSDDynamicalKernels, FixedRankChunkDescriptor
-from ebsdsim.integrate import next_active_voltage_kv, surrogate_to_multi_voltage_mc, trim_multi_voltage_mc_by_coverage
-from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
-from ebsdsim.lookup import (
+from ebsdsim.gpu.resident import make_metric_buffer
+from ebsdsim.lambert.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
+from ebsdsim.physics.lookup import (
     BuildLookupOptions,
     build_diff_lookup_from_geometry,
     prepare_diff_lookup_geometry,
 )
-from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, plan_safe_chunk_size
-from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif_path
-from ebsdsim.surrogate import infer_direct_exp_from_cell_rebinned
+from ebsdsim.physics.site_tables import prepare_site_sgh_tables
 
 
 def _timed(label: str, fn):
@@ -54,7 +57,10 @@ def main() -> None:
     first_vkv = next_active_voltage_kv(mc_for_bins, -1)
     assert first_vkv is not None
 
-    pg_grid = _timed("build_pg_k_grid", lambda: build_pg_k_grid(cell.pg_num, hw))
+    pg_grid = _timed(
+        "build_pg_k_grid",
+        lambda: build_pg_k_grid(cell.pg_num, hw, cell.space_group),
+    )
     sgh = _timed("prepare_site_sgh_tables", lambda: prepare_site_sgh_tables(cell, dmin))
     lookup_geometry = _timed(
         "prepare_diff_lookup_geometry", lambda: prepare_diff_lookup_geometry(cell, dmin)
@@ -78,11 +84,11 @@ def main() -> None:
         lambda: transform_pg_k_grid_to_reciprocal(pg_grid, cell.direct_structure_matrix, lookup.mlambda),
     )
 
-    from ebsdsim.runner import ReusablePersistent
+    from ebsdsim.gpu.resident import ResidentTables
 
     persistent = _timed(
         "create_persistent_buffers",
-        lambda: ReusablePersistent.create(kernels, lookup, sgh.tables),
+        lambda: ResidentTables.create(kernels, lookup, sgh.tables),
     )
 
     prescan = _timed(

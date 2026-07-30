@@ -1,4 +1,4 @@
-"""Batched complex64 LU factorization and solve kernels (WasmGPU-compatible)."""
+"""GPU layer: batched complex64 LU factorization/solve (WasmGPU-compatible)."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class LuKernels:
 
         if n < 160:
             self._write_batched_params(batch_count, n, elems_per_matrix)
-            code = load_wgsl("lu_factor_complex64.wgsl")
+            code = load_wgsl("lu/factor_complex64.wgsl")
             pipeline, layout = self.pipelines.get_pipeline(
                 "kernels:lu:factorComplexSmall",
                 code,
@@ -95,9 +95,9 @@ class LuKernels:
             self._submit_compute(pipeline, bg, (batch_count, 1, 1), "luFactorComplex64Batched")
             return
 
-        lead_code = load_wgsl("lu_factor_lead_complex64.wgsl")
-        upper_code = load_wgsl("lu_factor_upper_complex64.wgsl")
-        trail_code = load_wgsl("lu_factor_trailing_complex64.wgsl")
+        lead_code = load_wgsl("lu/factor_lead_complex64.wgsl")
+        upper_code = load_wgsl("lu/factor_upper_complex64.wgsl")
+        trail_code = load_wgsl("lu/factor_trailing_complex64.wgsl")
         lead_pipe, lead_layout = self.pipelines.get_pipeline(
             "kernels:lu:factorComplexLead",
             lead_code,
@@ -187,7 +187,7 @@ class LuKernels:
 
         self._write_batched_params(batch_count, n, elems_per_matrix)
         key = "kernels:lu:solveComplex" if n <= 512 else "kernels:lu:solveComplexLarge"
-        wgsl_name = "lu_solve_shared_complex64.wgsl" if n <= 512 else "lu_solve_large_complex64.wgsl"
+        wgsl_name = "lu/solve_shared_complex64.wgsl" if n <= 512 else "lu/solve_large_complex64.wgsl"
         code = load_wgsl(wgsl_name)
         pipeline, layout = self.pipelines.get_pipeline(
             key,

@@ -58,12 +58,12 @@ Simulation results are never min–max normalized. For display:
 Offline loading (NumPy only)
 ----------------------------
 
-The standalone :mod:`ebsdsim.mploader` module reads ``.npz`` files without
-installing the full GPU stack:
+The :mod:`ebsdsim.io.load` module reads ``.npz`` files and expands the
+fundamental sector via :mod:`ebsdsim.lambert`:
 
 .. code-block:: python
 
-   from ebsdsim.mploader import load_master_pattern, to_uint8, save_png_gray
+   from ebsdsim.io.load import load_master_pattern, to_uint8, save_png_gray
 
    mp = load_master_pattern("GaN-master-pattern.npz")
    disp, _ = mp.lambert_data(normalize="minmax")

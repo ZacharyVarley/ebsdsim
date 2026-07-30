@@ -11,19 +11,22 @@ Simulation
    :undoc-members:
    :show-inheritance:
 
+Result container
+----------------
+
+:class:`~ebsdsim.engine.results.MasterPattern` is defined in the engine layer
+and re-exported from :mod:`ebsdsim.api`.
+
 On-disk format
 --------------
 
-.. automodule:: ebsdsim.save
-   :members: save_master_pattern
+.. automodule:: ebsdsim.io.save
+   :members: save_master_pattern, stack_bins, cell_metadata
 
-Standalone loader
------------------
+Loader
+------
 
-:mod:`ebsdsim.mploader` is intentionally NumPy-only and can be copied into
-other projects without the GPU stack.
-
-.. automodule:: ebsdsim.mploader
+.. automodule:: ebsdsim.io.load
    :members:
    :undoc-members:
    :show-inheritance:
@@ -31,6 +34,6 @@ other projects without the GPU stack.
 Display scaling
 ---------------
 
-.. automodule:: ebsdsim.normalize
+.. automodule:: ebsdsim.lambert.display
    :members:
    :undoc-members:

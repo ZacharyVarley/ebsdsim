@@ -1,15 +1,14 @@
 import importlib.resources
-import numpy as np
 
-from ebsdsim.integrate import PerVoltageContext
-from ebsdsim.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
-from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
-from ebsdsim.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
-from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif_path
+import numpy as np
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.energy.surrogate import infer_direct_exp_from_cell_rebinned
+from ebsdsim.engine.integrate import PerVoltageContext, surrogate_to_multi_voltage_mc
+from ebsdsim.engine.runner import RunOneVoltageDeps, make_metric_buffer, run_one_voltage
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
-from ebsdsim.integrate import surrogate_to_multi_voltage_mc
-from ebsdsim.surrogate import infer_direct_exp_from_cell_rebinned
+from ebsdsim.lambert.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
+from ebsdsim.physics.lookup import BuildLookupOptions, build_diff_lookup
+from ebsdsim.physics.site_tables import prepare_site_sgh_tables
 
 ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
 cell = build_cell_from_cif_path(ni)
@@ -19,7 +18,7 @@ direct = infer_direct_exp_from_cell_rebinned(
 mc = surrogate_to_multi_voltage_mc(direct, 20.0)
 ctx = require_gpu()
 hw = 250
-pg = build_pg_k_grid(cell.pg_num, hw)
+pg = build_pg_k_grid(cell.pg_num, hw, cell.space_group)
 sgh = prepare_site_sgh_tables(cell, 0.05)
 kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
 metric = make_metric_buffer(kernels, cell)

@@ -13,7 +13,8 @@ vendored ``cif_reader`` package (dual-origin groups use origin choice 2).
 GPU setup — drivers, headless Linux, cloud VMs — follows the
 `wgpu-py installation guide <https://wgpu-py.readthedocs.io/en/stable/start.html#install-with-pip>`_.
 
-Loading saved ``.npz`` files via :mod:`ebsdsim.mploader` needs only NumPy.
+Loading saved ``.npz`` files via :mod:`ebsdsim.io.load` needs NumPy (and the
+shared Lambert helpers in :mod:`ebsdsim.lambert`).
 
 PyPI
 ----

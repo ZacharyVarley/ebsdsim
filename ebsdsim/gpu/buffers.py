@@ -1,12 +1,12 @@
-"""GPU storage buffer helpers."""
+"""GPU layer: storage-buffer helpers (bytes sizes for f32/c64/u32)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 import wgpu
+from numpy.typing import NDArray
 from wgpu import BufferUsage
 
 

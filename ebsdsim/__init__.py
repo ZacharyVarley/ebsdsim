@@ -41,12 +41,12 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MasterPattern": ("ebsdsim.api", "MasterPattern"),
     "master_pattern": ("ebsdsim.api", "master_pattern"),
     "master_pattern_from_cif": ("ebsdsim.api", "master_pattern_from_cif"),
-    "NormalizeMode": ("ebsdsim.normalize", "NormalizeMode"),
-    "LoadedMasterPattern": ("ebsdsim.mploader", "LoadedMasterPattern"),
-    "load_master_pattern": ("ebsdsim.mploader", "load_master_pattern"),
-    "save_png_gray": ("ebsdsim.mploader", "save_png_gray"),
-    "to_uint8": ("ebsdsim.mploader", "to_uint8"),
-    "save_master_pattern": ("ebsdsim.save", "save_master_pattern"),
+    "NormalizeMode": ("ebsdsim.lambert.display", "NormalizeMode"),
+    "LoadedMasterPattern": ("ebsdsim.io.load", "LoadedMasterPattern"),
+    "load_master_pattern": ("ebsdsim.io.load", "load_master_pattern"),
+    "save_png_gray": ("ebsdsim.io.load", "save_png_gray"),
+    "to_uint8": ("ebsdsim.io.load", "to_uint8"),
+    "save_master_pattern": ("ebsdsim.io.save", "save_master_pattern"),
 }
 
 

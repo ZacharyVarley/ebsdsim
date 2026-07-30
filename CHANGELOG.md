@@ -5,6 +5,67 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-30
+
+### Changed
+
+- Package layout now mirrors the simulation pipeline (`crystal` → `physics` →
+  `{lambert, energy}` → `gpu` → `engine` → `io` → `api`).
+- Default dynamical solver is Smith iterative (`solver="smith_iterative"`): a
+  BiCGSTAB Krylov solver over fixed-rank Smith iterates (rank 16), producing
+  per-bin patterns plus the voltage-integrated total. Requires WebGPU
+  `shader-f16`. Pass `solver="lu_smith"` for the previous dense LU–Smith path
+  (`rank` applies only to `lu_smith`).
+- Dense LU–Smith host code is split into stage modules under
+  `ebsdsim.gpu.dynamical` (`workspace` / `score` / `assemble` / `solve` /
+  `intensity` / `chunks`) with a thin `kernels` façade.
+- Internal simulation cell renamed to `SimCell` / `SimAtom` (nm); public
+  `api.Cell` / `api.Atom` remain ångström specs.
+- Master-pattern loader lives at `ebsdsim.io.load` (Lambert math shared with
+  `ebsdsim.lambert`).
+- Simulation keywords are one `SimParams` dataclass (`ebsdsim.engine.params`)
+  instead of being re-declared on each entry point; `master_pattern_from_cif`
+  now forwards `**kwargs` to `master_pattern`.
+- `Atom` / `Cell` / `Material` are defined in `ebsdsim.crystal.material` and
+  `MasterPattern` in `ebsdsim.engine.results`; both are re-exported from
+  `ebsdsim` and `ebsdsim.api`, so existing imports are unaffected.
+- Orbit expansion for hand-built `Material` inputs now uses the same
+  International Tables Hall-operator path as CIF ingest. **This changes
+  symmetry-expanded sites for 24 dual-origin space groups** (48, 50, 59, 68,
+  70, 85, 86, 88, 125, 126, 129, 130, 133, 134, 137, 138, 141, 142, 201, 203,
+  222, 224, 227, 228) — see *Fixed*. Other space groups are unaffected.
+- `folding_symbol` and `build_pg_k_grid` now require the space group, and the
+  number-only symbol lookup (`pg_num_to_symbol` / `unoriented_pg_symbol`) has
+  been removed entirely, so an orientation-ambiguous point group can no longer
+  be resolved from its number alone.
+
+### Fixed
+
+- Hand-built `Material` inputs used a legacy operator table that produced wrong
+  symmetry orbits for the 24 dual-origin space groups, including incorrect site
+  multiplicities. Space group 227 with an atom at (⅛, ⅛, ⅛) — the diamond site —
+  expanded to 16 sites instead of 8. Both ingest paths now use Hall operators.
+  Orbit expansion is also canonically sorted, so results no longer depend on the
+  order symmetry operators happen to be enumerated in.
+- CIF ingest now applies the documented default Debye–Waller factor
+  **B_iso = 0.5 Å² (0.005 nm²)** when `_atom_site_B_iso_or_equiv` /
+  `_atom_site_U_iso_or_equiv` are missing or non-positive (including explicit
+  `0`, which is unphysical at finite temperature), matching the Material path.
+  The CIF reader warns and substitutes the default before simulation cell build.
+- LU–Smith chunk planning now respects
+  `max_compute_workgroups_per_dimension` (in addition to storage-buffer size),
+  so large Bethe systems no longer dispatch illegal 1-D workgroup counts.
+- The GPU Lambert rasterizer fills sheets in bounded per-view bands instead of
+  stacking every energy bin into one dispatch, so the storage-buffer binding
+  limit is no longer hit at large `halfw` with many bins (bitwise-identical
+  output).
+
+### Notes
+
+- Patterns from CIFs that previously ran with B=0 (no U/B tags, or explicit
+  non-positive U/B) should be regenerated if Debye–Waller matters for the use
+  case.
+
 ## [0.1.10] - 2026-07-16
 
 ### Fixed

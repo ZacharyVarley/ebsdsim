@@ -1,12 +1,11 @@
 import importlib.resources
 
-from ebsdsim.kgrid import build_pg_k_grid
-from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
-from ebsdsim.runner import plan_safe_chunk_size, RunOneVoltageDeps
-from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif_path
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.engine.runner import make_metric_buffer, plan_safe_chunk_size
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
-from ebsdsim.runner import make_metric_buffer
+from ebsdsim.lambert.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
+from ebsdsim.physics.lookup import BuildLookupOptions, build_diff_lookup
+from ebsdsim.physics.site_tables import prepare_site_sgh_tables
 
 ni = importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/Ni.cif")
 cell = build_cell_from_cif_path(ni)
@@ -14,9 +13,8 @@ ctx = require_gpu()
 kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
 lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=19.5, dmin=0.05))
 sgh = prepare_site_sgh_tables(cell, 0.05)
-pg = build_pg_k_grid(cell.pg_num, 250)
+pg = build_pg_k_grid(cell.pg_num, 250, cell.space_group)
 metric = make_metric_buffer(kernels, cell)
-from ebsdsim.kgrid import transform_pg_k_grid_to_reciprocal
 
 kvecs = transform_pg_k_grid_to_reciprocal(pg, cell.direct_structure_matrix, lookup.mlambda)
 persistent = kernels.create_persistent_buffers(

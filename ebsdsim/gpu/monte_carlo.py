@@ -1,4 +1,4 @@
-"""GPU Monte Carlo backscatter (fly-first boundary mode)."""
+"""GPU layer: Monte Carlo electron trajectory kernels."""
 
 from __future__ import annotations
 
@@ -7,14 +7,19 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-import wgpu
 from wgpu import BufferBindingType, BufferUsage, ShaderStage
 
-from ebsdsim.binning import dynamical_voltages_kv, extra_energy_bin_params, make_batch_sizes, shave_and_renormalize_4d
+from ebsdsim.crystal.simcell import SimCell
+from ebsdsim.energy.binning import (
+    dynamical_voltages_kv,
+    extra_energy_bin_params,
+    make_batch_sizes,
+    shave_and_renormalize_4d,
+)
+from ebsdsim.energy.mc import MultiVoltageMC
 from ebsdsim.gpu.buffers import StorageBuffer
 from ebsdsim.gpu.device import require_gpu, sync_device
 from ebsdsim.gpu.pipelines import load_wgsl
-from ebsdsim.types import Cell, MultiVoltageMC
 
 _DEPTH_MODE_LINEAR = 0
 _DEPTH_BINS = 128
@@ -158,7 +163,7 @@ class _McBoundaryRunner:
     def __init__(self, ctx: Any) -> None:
         self.device = ctx.device
         self.queue = ctx.queue
-        code = load_wgsl("mc_boundary_modes.wgsl")
+        code = load_wgsl("mc/boundary_modes.wgsl")
         layout = self.device.create_bind_group_layout(
             entries=[
                 {
@@ -279,7 +284,7 @@ def _fit_mc_histogram(
 
 
 def run_monte_carlo_gpu(
-    cell: Cell,
+    cell: SimCell,
     voltage_kv: float,
     *,
     energy_binwidth_kev: float = 0.1,

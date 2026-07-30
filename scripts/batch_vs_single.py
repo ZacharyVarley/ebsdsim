@@ -5,15 +5,18 @@ from __future__ import annotations
 import importlib.resources
 
 import numpy as np
-
+from ebsdsim.crystal.build import build_cell_from_cif_path, metric_to_float32
+from ebsdsim.engine.integrate import compute_mu_eff
+from ebsdsim.engine.runner import plan_safe_chunk_size
 from ebsdsim.gpu import EBSDDynamicalKernels, require_gpu
 from ebsdsim.gpu.device import sync_device
-from ebsdsim.integrate import compute_mu_eff
-from ebsdsim.kgrid import build_pg_k_grid, chunk_k_vectors, transform_pg_k_grid_to_reciprocal
-from ebsdsim.lookup import BuildLookupOptions, build_diff_lookup
-from ebsdsim.runner import plan_safe_chunk_size
-from ebsdsim.sgh import prepare_site_sgh_tables
-from ebsdsim.structure import build_cell_from_cif_path, metric_to_float32
+from ebsdsim.lambert.kgrid import (
+    build_pg_k_grid,
+    chunk_k_vectors,
+    transform_pg_k_grid_to_reciprocal,
+)
+from ebsdsim.physics.lookup import BuildLookupOptions, build_diff_lookup
+from ebsdsim.physics.site_tables import prepare_site_sgh_tables
 
 
 def _setup():
@@ -21,7 +24,7 @@ def _setup():
     cell = build_cell_from_cif_path(ni)
     ctx = require_gpu()
     lookup = build_diff_lookup(cell, BuildLookupOptions(voltage_kv=19.5, dmin=0.05))
-    pg = build_pg_k_grid(cell.pg_num, 250)
+    pg = build_pg_k_grid(cell.pg_num, 250, cell.space_group)
     sgh = prepare_site_sgh_tables(cell, 0.05)
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     metric = kernels.create_metric_buffer(metric_to_float32(cell))

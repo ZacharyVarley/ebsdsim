@@ -9,11 +9,11 @@ import zlib
 from pathlib import Path
 
 import numpy as np
-
-from ebsdsim.api import _run_master_pattern
-from ebsdsim.kgrid import build_pg_k_grid
-from ebsdsim.rasterize import RasterizeOptions, float01_to_uint8, rasterize_pattern
-from ebsdsim.structure import build_cell_from_cif_path
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.engine.master_pattern import run_master_pattern
+from ebsdsim.engine.params import SimParams
+from ebsdsim.lambert.kgrid import build_pg_k_grid
+from ebsdsim.lambert.rasterize import RasterizeOptions, float01_to_uint8, rasterize_pattern
 
 
 def write_grayscale_png(path: Path, gray: np.ndarray) -> None:
@@ -72,8 +72,7 @@ def main() -> None:
     cell = build_cell_from_cif_path(ni_cif)
 
     print(f"Running Ni master pattern ({grid_size}x{grid_size} Lambert NH, app beam cutoffs)...")
-    result = _run_master_pattern(
-        cell=cell,
+    params = SimParams(
         voltage_kv=20.0,
         halfw=halfw,
         dmin=0.05,
@@ -83,18 +82,21 @@ def main() -> None:
         omega_deg=0.0,
         rank=20 if args.full else 8,
         chunk_size=256,
-        mode="bloch",
         marginal_coverage=1.0,
         relative_image_stop=0.01,
         mc_backend="surrogate",
-        source=str(ni_cif),
         bethe_c_strong=20.0,
         bethe_c_weak=40.0,
         bethe_c_cutoff=200.0,
         dbdiff_sg_cutoff=1.0,
     )
+    result = run_master_pattern(cell, params, source=str(ni_cif), mode="bloch")
 
-    pg_grid = build_pg_k_grid(int(result.metadata["pg_num"]), halfw)
+    pg_grid = build_pg_k_grid(
+        int(result.metadata["pg_num"]),
+        halfw,
+        int(result.metadata["cell"]["space_group"]),
+    )
     raster = rasterize_pattern(
         result.integrated,
         pg_grid,

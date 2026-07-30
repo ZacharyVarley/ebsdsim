@@ -90,5 +90,5 @@ Saved ``.npz`` layout
 | ``meta_json``          | Simulation metadata (UTF-8 JSON)                     |
 +------------------------+------------------------------------------------------+
 
-Offline loading uses :mod:`ebsdsim.mploader` (NumPy only). See
+Offline loading uses :mod:`ebsdsim.io.load` (NumPy only). See
 :doc:`quickstart` and ``examples/02_save_and_load.ipynb``.

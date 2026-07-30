@@ -1,4 +1,4 @@
-"""Device limit helpers for wgpu-py."""
+"""GPU layer: device workgroup / buffer limit helpers."""
 
 from __future__ import annotations
 

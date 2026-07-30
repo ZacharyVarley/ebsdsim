@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import ebsdsim as es
-from ebsdsim.mploader import save_png_gray, to_uint8
+from ebsdsim.io.load import save_png_gray, to_uint8
 
 OUT = Path("output")
 OUT.mkdir(exist_ok=True)
