@@ -50,8 +50,12 @@ jobs:
       - name: Run GPU tests
         # Per-test timeout: a stuck GPU sync must fail fast, not burn the
         # runner for hours. thread method: signal-based timeouts cannot
-        # interrupt a thread blocked inside a native (CFFI) call.
-        run: pytest -q --timeout=300 --timeout-method=thread
+        # interrupt a thread blocked inside a native (CFFI) call — but it
+        # os._exit()s, so no failure summary is printed for earlier tests.
+        # -v: the last printed test id names the culprit even after a
+        # force-exit. -x: stop at the first failure so its traceback is
+        # reported before any later hang can kill the session.
+        run: pytest -v -x --tb=short --timeout=300 --timeout-method=thread
 
   build:
     name: Build wheel

@@ -46,15 +46,21 @@ def test_master_pattern_cif_suite_halfw10(cif_path: Path) -> None:
         solver="smith_iterative",
         verbosity=0,
     )
+    ctx = (
+        f"mode={mp.metadata.get('smith_iterative_mode')} "
+        f"fail_k={mp.metadata.get('fail_k')} "
+        f"k_solved={mp.metadata.get('k_solved')} "
+        f"k_per_s={mp.metadata.get('k_per_s')}"
+    )
     side = 21
     assert mp.pattern.shape == (side, side)
     assert mp.metadata["grid_size"] == side
     assert mp.metadata["halfw"] == 10
     assert mp.metadata["solver"] == "smith_iterative"
-    assert int(mp.metadata.get("fail_k", 0)) == 0
-    assert np.all(np.isfinite(mp.pattern))
-    assert np.any(mp.pattern > 0)
-    assert np.all(np.isfinite(mp.integrated))
-    assert np.any(mp.integrated > 0)
+    assert int(mp.metadata.get("fail_k", 0)) == 0, ctx
+    assert np.all(np.isfinite(mp.pattern)), ctx
+    assert np.any(mp.pattern > 0), ctx
+    assert np.all(np.isfinite(mp.integrated)), ctx
+    assert np.any(mp.integrated > 0), ctx
     assert mp.n_k > 0
     assert mp.n_sites >= 1
