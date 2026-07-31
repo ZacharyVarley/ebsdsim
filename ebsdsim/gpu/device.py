@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import time
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -13,6 +15,33 @@ class GpuContext:
     adapter: Any
     device: Any
     queue: Any
+
+
+def _patch_darwin_poller(device: Any) -> None:
+    """Work around the wgpu-hal Metal blocking-poll deadlock (gfx-rs/wgpu#9531).
+
+    wgpu-py's poll thread waits with ``wgpuDevicePoll(block=True)``, whose
+    Metal implementation spin-polls ``MTLCommandBuffer.status()`` and can fail
+    to ever observe completion for command buffers longer than ~hundreds of
+    ms — the GPU work finishes but the wait never returns, so map/sync
+    promises hang forever. Non-blocking polls use the reliable fence-value
+    path, so on macOS we make the poll thread always poll non-blocking (with
+    a short sleep in place of the block). No-op if wgpu-py's internals differ.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        poller = device._poller
+        orig = poller._poll_func
+    except AttributeError:
+        return
+
+    def pumped_poll(block: bool) -> None:
+        orig(False)
+        if block:
+            time.sleep(0.002)
+
+    poller._poll_func = pumped_poll
 
 
 _context: GpuContext | None = None
@@ -51,6 +80,7 @@ def get_device(
         device = adapter.request_device_sync(required_features=list(want))
     else:
         device = adapter.request_device_sync()
+    _patch_darwin_poller(device)
     _context = GpuContext(adapter=adapter, device=device, queue=device.queue)
     _context_features = want
     return _context

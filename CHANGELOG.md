@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- macOS/Metal: work around the wgpu-hal blocking-poll deadlock
+  ([gfx-rs/wgpu#9531](https://github.com/gfx-rs/wgpu/issues/9531)) that made
+  GPU synchronisation hang forever after command buffers longer than
+  ~hundreds of ms — long dynamical-solve dispatches could wedge any wait on
+  Apple Silicon. The upstream fix has not shipped in any wgpu-py release
+  (0.31.1 bundles wgpu-native v27, 0.32.0 bundles v29.0.0.0; both predate
+  it), so on macOS the device poll thread now polls non-blocking.
+- macOS/Metal: smith_iterative shader buckets are sized to the device's
+  reported `max-compute-workgroup-storage-size` instead of a hardcoded
+  ~48 KiB budget, so devices with smaller workgroup storage slide down the
+  pack ladder instead of failing pipeline creation. Buckets on 48 KiB
+  devices (D3D12-class) are unchanged.
+
 ## [0.2.1] - 2026-07-30
 
 ### Fixed
