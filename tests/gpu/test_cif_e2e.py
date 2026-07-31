@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import ebsdsim as es
@@ -14,31 +13,9 @@ _CIF_DIR = Path(__file__).resolve().parents[1] / "data" / "cif"
 _CIF_PATHS = sorted(_CIF_DIR.glob("sg_*.cif"))
 assert _CIF_PATHS, f"no CIF fixtures under {_CIF_DIR}"
 
-# Cells that deterministically produce an all-zero pattern on Apple Silicon
-# Metal (upstream wgpu-native pre-v30 class: sg_004 failed 6/6 fresh-device
-# draws, sg_168 3/3, while identical shader constants are bit-correct on
-# D3D12). These are the two largest-footprint cells in the suite. Repro
-# archived at scratch/metal_sg004_repro.py. xfail is macOS-only and
-# non-strict so an xpass (e.g. fixed wgpu-native) stays visible.
-_METAL_ZERO_CIFS = {"sg_004_1004038", "sg_168_2232341"}
-
 
 def _suite_params() -> list:
-    params = []
-    for p in _CIF_PATHS:
-        marks = []
-        if sys.platform == "darwin" and p.stem in _METAL_ZERO_CIFS:
-            marks.append(
-                pytest.mark.xfail(
-                    reason=(
-                        "deterministic all-zero output on Apple Silicon Metal "
-                        "(upstream wgpu-native pre-v30); correct on D3D12"
-                    ),
-                    strict=False,
-                )
-            )
-        params.append(pytest.param(p, marks=marks, id=p.stem))
-    return params
+    return [pytest.param(p, id=p.stem) for p in _CIF_PATHS]
 
 
 def _gpu_smith_iterative_available() -> bool:

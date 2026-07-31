@@ -8,10 +8,9 @@ import pytest
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Allow GPU tests two reruns on macOS.
 
-    A freshly created Metal device is *usually* clean but not always —
-    the same pre-v30 wgpu-native corruption occasionally zeroes reads even
-    on a new device. Reruns re-draw a fresh device via the fixture below,
-    making a corrupt draw on every attempt vanishingly unlikely.
+    An aborted overlong Metal command buffer can leave the cached device
+    unusable for the rest of the process. Reruns re-draw a fresh device via
+    the fixture below so a later attempt can proceed.
     """
     if sys.platform != "darwin":
         return
@@ -24,10 +23,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 def _fresh_device_on_metal() -> None:
     """Force a fresh WebGPU device before each test on macOS.
 
-    wgpu-native's Metal backend (pre-v30) accumulates corrupted completion
-    state across repeated pipeline/buffer create-destroy cycles on one
-    device, causing reads to intermittently return zeros. A fresh device
-    starts clean; other platforms keep the shared cached device.
+    An aborted Metal command buffer can leave the shared cached device
+    unusable. Starting each test on a fresh device isolates that failure
+    mode from later tests; other platforms keep the shared cached device.
     """
     if sys.platform == "darwin":
         from ebsdsim.gpu.device import get_device

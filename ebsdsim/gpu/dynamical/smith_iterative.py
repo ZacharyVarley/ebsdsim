@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -47,6 +48,14 @@ __all__ = [
 # size ONE large tile to this budget and stream a handful of tiles with backpressure.
 TILE_VRAM_BUDGET_BYTES = 1_500_000_000
 
+# One k-tile is one command buffer running RANK BiCGSTAB solves per k, so a
+# VRAM-sized tile can run for many seconds. Metal aborts command buffers that
+# run too long and silently discards every write in the submit — the buffers
+# then read back zero-initialised and the pattern is blank with no error. Bound
+# tile * iters * n^2 so a submit stays inside the driver's execution window.
+NOMINAL_SOLVE_ITERS = 96
+SUBMIT_WORK_BUDGET = 4_000_000_000 if sys.platform == "darwin" else 0
+
 
 def _per_k_workspace_bytes(n_g: int, n: int, n_w: int, n_sites: int) -> int:
     # Mirrors _slim_workspace allocations (dominant terms).
@@ -60,17 +69,30 @@ def _per_k_workspace_bytes(n_g: int, n: int, n_w: int, n_sites: int) -> int:
 
 
 def auto_tile_k(
-    n_g: int, n: int, n_w: int, n_sites: int, *, budget: int = TILE_VRAM_BUDGET_BYTES, cap: int = MAX_WG_PER_DIM
+    n_g: int,
+    n: int,
+    n_w: int,
+    n_sites: int,
+    *,
+    budget: int = TILE_VRAM_BUDGET_BYTES,
+    cap: int = MAX_WG_PER_DIM,
+    submit_work_budget: int | None = None,
 ) -> int:
     """Largest k-tile whose workspace fits ``budget`` (min 256, capped).
 
     Capped at ``MAX_WG_PER_DIM`` because the per-k kernels (smith_iterative/topk/slim/inten)
     launch one workgroup per k. The score/gather kernels are grid-strided, so they
     do not constrain the tile.
+
+    ``submit_work_budget`` additionally bounds how long one submit may run
+    (see ``SUBMIT_WORK_BUDGET``); 0 disables the bound.
     """
     per_k = _per_k_workspace_bytes(n_g, n, n_w, n_sites)
-    tile = max(256, budget // max(1, per_k))
-    return int(min(cap, tile))
+    tile = min(cap, max(256, budget // max(1, per_k)))
+    work = SUBMIT_WORK_BUDGET if submit_work_budget is None else int(submit_work_budget)
+    if work > 0:
+        tile = min(tile, max(16, work // max(1, NOMINAL_SOLVE_ITERS * n * n)))
+    return int(tile)
 
 
 class _Prof:
@@ -350,6 +372,8 @@ def run_bins_dynamical(
         submitter._bind_groups.clear()
 
     try:
+        saw_weighted_bin = False
+        saw_intensity = False
         for bi, vbin in enumerate(bins):
             if pre_activated is not None:
                 act = pre_activated[bi]
@@ -577,6 +601,9 @@ def run_bins_dynamical(
             bin_dyn_timings.append(bin_dyn)
             bins_run = bi + 1
 
+            saw_weighted_bin = saw_weighted_bin or amp > 0.0
+            saw_intensity = saw_intensity or bool(bin_weighted[bi].any())
+
             # Early stop: relative change of the voltage-integrated pattern in
             # the flattened fundamental-sector n_k view (mirrors the LU path).
             weighted_delta_sum_view = bin_weighted[bi].astype(np.float64).sum(axis=1)
@@ -622,6 +649,14 @@ def run_bins_dynamical(
         safe_w = np.where(w != 0.0, w, 1.0)
         bin_intensities = (bin_weighted.astype(np.float64) / safe_w).astype(np.float32)
         bin_intensities = np.where(w != 0.0, bin_intensities, 0.0).astype(np.float32)
+        # A submit the driver aborts leaves every buffer zero-initialised and
+        # reports no error, so a fully blank solve means nothing ever landed.
+        if saw_weighted_bin and not saw_intensity:
+            raise RuntimeError(
+                f"smith_iterative solved {bins_run} weighted bin(s) but every intensity is "
+                f"zero (k tile {chunk}, n_strong {n}). The GPU discarded the submits, which "
+                f"happens when a command buffer runs too long; retry with a smaller k tile."
+            )
     finally:
         _destroy_ws(ws)
         stats.destroy()

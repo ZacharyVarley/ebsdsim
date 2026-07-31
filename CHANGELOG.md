@@ -21,31 +21,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ~48 KiB budget, so devices with smaller workgroup storage slide down the
   pack ladder instead of failing pipeline creation. Buckets on 48 KiB
   devices (D3D12-class) are unchanged.
-- macOS/Metal: the unique-segment tile path stored compacted deltas in an
-  f16 storage buffer; Metal miscompiles f16 storage writes (values read
-  back as zeros), producing silently all-zero master patterns for
-  plen-heavy cells. The compacted-value buffer is now f32 (f16 remains
-  workgroup-only, where it is correct on all tested backends).
+- macOS/Metal: smith_iterative now bounds per-submit work when sizing the
+  k-tile, and raises if a bin would otherwise read back as all zeros.
+  Each k-tile is one command buffer for the whole pipeline (excitation
+  score → topk → gather/slim → BiCGSTAB → intensity). `auto_tile_k`
+  previously sized that tile by VRAM alone with no execution-time bound, so
+  a submit could run tens of thousands of workgroups for hundreds of
+  BiCGSTAB iterations. Metal aborts overlong command buffers and silently
+  discards every write in that submit; outputs then read back at their
+  zero-initialised values, producing an all-zero master pattern with no
+  error. Shrinking the k-chunk from 2048 to 128 made the two previously
+  failing CIFs (`sg_004_1004038`, `sg_168_2232341`) match Windows to five
+  significant figures; the darwin-only e2e xfails for those fixtures are
+  removed. Earlier attributions to f16 storage miscompilation or upstream
+  wgpu-native cumulative device-state corruption were incorrect — the
+  per-test fresh-device fixture appeared to help only because a killed
+  submit leaves the device unusable and forcing a new one let the next
+  test proceed.
 - `wgpu==0.32.0` is supported again: the 0.2.1 exclusion is replaced by a
   runtime shim that corrects that release's queue work-done CFFI callback
   signature (its bundled wgpu-native v29 added a `WGPUStringView`
   parameter the Python codegen missed). The shim activates only on
   wgpu-py 0.32.0.
-- macOS/Metal: the GPU test suite now runs each test on a fresh WebGPU
-  device. Pre-v30 wgpu-native Metal accumulates corrupted completion state
-  across repeated pipeline/buffer create-destroy cycles on one device,
-  making reads intermittently return zeros later in a process; a fresh
-  device starts clean. Library code is unchanged — long-lived single-device
-  sessions are unaffected on other platforms, and `get_device(force=True)`
-  is available as an escape hatch on macOS.
-- macOS/Metal: two e2e fixtures (`sg_004_1004038`, `sg_168_2232341`) are
-  xfailed on macOS only. They deterministically produce all-zero patterns
-  under Apple Silicon Metal (six of six, respectively three of three,
-  fresh-device attempts) while the identical shader constants are
-  bit-correct on D3D12 — the same upstream pre-v30 wgpu-native Metal class
-  as above, not a library defect; both are the largest-footprint cells in
-  the suite. Repro archived at `scratch/metal_sg004_repro.py`; the xfails
-  are non-strict so a fixed wgpu-native surfaces as an xpass.
 
 ## [0.2.1] - 2026-07-30
 
