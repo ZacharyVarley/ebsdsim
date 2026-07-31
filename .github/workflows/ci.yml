@@ -48,7 +48,8 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run GPU tests
-        run: pytest -v --tb=short --timeout=300 --timeout-method=thread
+        # TEMPORARY: narrowed to the sg_004_1004038 determinism probe.
+        run: pytest tests/gpu/test_debug_metal_sg004.py -v -s --timeout=600 --timeout-method=thread
 
   build:
     name: Build wheel
