@@ -1,13 +1,11 @@
-"""TEMPORARY final discriminator bisect for the Metal zero on sg_004.
+"""TEMPORARY scalar-field bisect for the Metal zero on sg_004.
 
-Known: direct run_bins_dynamical with one hand-made VoltageBin(20.0) is
-bit-correct on Metal; the runner path is all-zero even at max_bins_run=1.
-Isolate the discriminator among {queue_depth, bin construction/prefetch,
-runner wrapper}:
-  A  direct, hand bin v=20 (known good anchor)
-  B1 runner, mrb=1, qd=1
-  B2 runner, mrb=1, qd=4 (known bad anchor)
-  A2 direct with the runner-constructed mc bin (tests bin/prefetch inputs)
+The mc VoltageBin scalar fields deterministically zero the dynamical output
+on Metal (hand bin with all-1.0 scalars is bit-correct). Split the two
+suspects: beta (mu_shift into the f16 Krylov solve) vs amp=amplitude x
+energy_weight (f16 multiply in intensity writeback; f16 subnormal flush on
+Metal). Prints solver iteration stats to distinguish a degenerate solve
+(mu path) from a healthy solve with flushed output (amp path).
 Always asserts false to surface the report.
 Delete once the Metal behavior is understood.
 """
@@ -21,10 +19,7 @@ import pytest
 from ebsdsim.crystal.build import build_cell_from_cif_path
 from ebsdsim.energy.surrogate import infer_direct_exp_from_cell_rebinned
 from ebsdsim.engine.integrate import surrogate_to_multi_voltage_mc
-from ebsdsim.engine.smith_iterative_runner import (
-    _voltage_bins_from_mc,
-    run_smith_iterative_voltage_integrated,
-)
+from ebsdsim.engine.smith_iterative_runner import _voltage_bins_from_mc
 from ebsdsim.gpu.device import get_device, require_gpu
 from ebsdsim.gpu.dynamical.kernels import EBSDDynamicalKernels
 from ebsdsim.gpu.dynamical.smith_iterative import (
@@ -45,7 +40,7 @@ _CIF = Path(__file__).resolve().parents[1] / "data" / "cif" / f"{_STEM}.cif"
 pytestmark = pytest.mark.gpu
 
 
-def _direct(cell, bins, qd):
+def _direct(cell, bins):
     ctx = get_device(force=True, required_features=("shader-f16",))
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     prep, bins = open_smith_iterative_prep(
@@ -65,39 +60,23 @@ def _direct(cell, bins, qd):
             code_smith_iterative=code,
             code_inten=load_wgsl("dynamical/intensity_fused_exact.wgsl"),
             first_act=act,
-            queue_depth=qd,
+            queue_depth=1,
         )
-        return float(np.sum(dyn["intensities"])), mode
+        iters = sum(int(cs.get("iters", 0)) for cs in dyn.get("chunk_stats", []))
+        return (
+            float(np.sum(dyn["intensities"])),
+            mode,
+            int(dyn.get("fail_k", -1)),
+            iters,
+            float(act["mu"]),
+            float(act["amplitude"]),
+        )
     finally:
         prep.close()
         kernels.destroy()
 
 
-def _runner(cell, mc, qd):
-    ctx = get_device(force=True, required_features=("shader-f16",))
-    kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
-    try:
-        result, meta = run_smith_iterative_voltage_integrated(
-            cell=cell,
-            mc=mc,
-            halfw=10,
-            dmin=0.05,
-            voltage_kv=20.0,
-            bethe_c_strong=20.0,
-            bethe_c_weak=40.0,
-            bethe_c_cutoff=200.0,
-            dbdiff_sg_cutoff=1.0,
-            kernels=kernels,
-            marginal_coverage=1.0,
-            queue_depth=qd,
-            max_bins_run=1,
-        )
-        return float(np.sum(result.integrated)), str(meta.get("smith_iterative_mode"))
-    finally:
-        kernels.destroy()
-
-
-def test_metal_final_discriminator() -> None:
+def test_metal_scalar_bisect() -> None:
     try:
         require_gpu(required_features=("shader-f16",))
     except RuntimeError:
@@ -107,31 +86,18 @@ def test_metal_final_discriminator() -> None:
         cell=cell, sigma_deg=70.0, beam_kv=20.0, energy_binwidth_keV=5.0, n_energy_bins=4
     )
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
-    mc_bin = _voltage_bins_from_mc(mc)[0]
-    print(
-        f"[debug] mc bin0: v={mc_bin.voltage_kv} next={mc_bin.next_voltage_kv} "
-        f"amp={mc_bin.amplitude} w={mc_bin.energy_weight}",
-        flush=True,
-    )
-    s, m = _direct(cell, [VoltageBin(20.0, None, 1.0, 1.0, 1.0, 0)], qd=1)
-    print(f"[debug] A  direct-handbin-qd1   sum={s:.6e} mode={m}", flush=True)
-    s, m = _runner(cell, mc, qd=1)
-    print(f"[debug] B1 runner-mrb1-qd1      sum={s:.6e} mode={m}", flush=True)
-    s, m = _runner(cell, mc, qd=4)
-    print(f"[debug] B2 runner-mrb1-qd4      sum={s:.6e} mode={m}", flush=True)
-    s, m = _direct(cell, [mc_bin], qd=1)
-    print(f"[debug] A2 direct-mcbin-qd1     sum={s:.6e} mode={m}", flush=True)
-    scalars_no_prefetch = VoltageBin(
-        mc_bin.voltage_kv,
-        None,
-        mc_bin.beta,
-        mc_bin.amplitude,
-        mc_bin.energy_weight,
-        mc_bin.bin_index,
-    )
-    s, m = _direct(cell, [scalars_no_prefetch], qd=1)
-    print(f"[debug] A3 direct-mcscalars-noprefetch sum={s:.6e} mode={m}", flush=True)
-    prefetch_only = VoltageBin(20.0, 15.0, 1.0, 1.0, 1.0, 0)
-    s, m = _direct(cell, [prefetch_only], qd=1)
-    print(f"[debug] A4 direct-prefetch-only sum={s:.6e} mode={m}", flush=True)
+    b0 = _voltage_bins_from_mc(mc)[0]
+    configs = [
+        ("ALL1   ", VoltageBin(20.0, None, 1.0, 1.0, 1.0, 0)),
+        ("BETA   ", VoltageBin(20.0, None, b0.beta, 1.0, 1.0, 0)),
+        ("AMP    ", VoltageBin(20.0, None, 1.0, b0.amplitude, b0.energy_weight, 0)),
+        ("FULLMC ", VoltageBin(20.0, None, b0.beta, b0.amplitude, b0.energy_weight, 0)),
+    ]
+    for name, vb in configs:
+        s, mode, fail_k, iters, mu, amp = _direct(cell, [vb])
+        print(
+            f"[debug] {name} sum={s:.6e} mu={mu:.6f} amp={amp:.6e} "
+            f"fail_k={fail_k} iters={iters} mode={mode}",
+            flush=True,
+        )
     raise AssertionError("probe complete - see [debug] annotations")
