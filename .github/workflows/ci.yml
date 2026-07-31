@@ -48,15 +48,19 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run GPU tests
+        # TEMPORARY: narrowed to the Metal stage-bisect probe.
         run: |
           set -o pipefail
-          pytest -v --tb=short --timeout=300 --timeout-method=thread 2>&1 | tee pytest-out.txt
+          pytest tests/gpu/test_debug_metal_stage.py -v -s --timeout=600 --timeout-method=thread 2>&1 | tee pytest-out.txt
 
       - name: Surface failures as annotations
         if: failure()
         run: |
           grep -E "^(FAILED|ERROR)" pytest-out.txt | head -20 | while read -r line; do
             echo "::error::$line"
+          done
+          grep -F "[debug]" pytest-out.txt | head -40 | while read -r line; do
+            echo "::notice::$line"
           done
           grep -E "passed|failed" pytest-out.txt | tail -3 | while read -r line; do
             echo "::notice::$line"
