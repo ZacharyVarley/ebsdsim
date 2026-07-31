@@ -1,9 +1,9 @@
-"""TEMPORARY Metal debug probe: where does sg_003_1536903 zero out on CI?
+"""TEMPORARY Metal debug probe v3: bisect the integrated accumulator per bin.
 
-The dynamical solve alone is CORRECT on Metal (A/B probe: default and
-dense-tile both reproduce Windows intensities at the 32K bucket). This probe
-runs the exact failing e2e call and dumps every downstream stage: bin
-weights, per-bin Lambert sums, raw integrated sums, final pattern sum.
+Probe v2 showed on Metal: per-bin patterns correct for bins 0/1, zero for
+bin 2, and the GPU `output` accumulator (RMW adds in intensity_fused_exact)
+reads back ALL ZERO. Run the production runner with max_bins_run=1,2,3 and
+compare GPU accumulator vs host-recombined weighted sum after each prefix.
 Delete this file once the Metal failure is root-caused.
 """
 
@@ -13,46 +13,64 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from ebsdsim.crystal.build import build_cell_from_cif_path
+from ebsdsim.energy.surrogate import infer_direct_exp_from_cell_rebinned
+from ebsdsim.engine.integrate import surrogate_to_multi_voltage_mc
+from ebsdsim.engine.smith_iterative_runner import run_smith_iterative_voltage_integrated
 from ebsdsim.gpu.device import require_gpu
-
-import ebsdsim as es
+from ebsdsim.gpu.dynamical.kernels import EBSDDynamicalKernels
 
 _CIF = Path(__file__).resolve().parents[1] / "data" / "cif" / "sg_003_1536903.cif"
 
 pytestmark = pytest.mark.gpu
 
 
-def test_metal_e2e_stage_dump() -> None:
+def test_metal_accumulator_bisect() -> None:
     try:
-        require_gpu(required_features=("shader-f16",))
+        ctx = require_gpu(required_features=("shader-f16",))
     except RuntimeError:
         pytest.skip("WebGPU adapter with shader-f16 unavailable")
-    mp = es.master_pattern_from_cif(
-        _CIF,
-        voltage_kv=20.0,
-        halfw=10,
-        dmin=0.05,
+    cell = build_cell_from_cif_path(_CIF)
+    direct = infer_direct_exp_from_cell_rebinned(
+        cell=cell,
+        sigma_deg=0.0,
+        beam_kv=20.0,
         energy_binwidth_keV=5.0,
-        marginal_coverage=1.0,
-        mc_backend="surrogate",
-        solver="smith_iterative",
-        verbosity=0,
+        n_energy_bins=4,
     )
-    meta = mp.metadata
-    print(
-        f"\n[debug] bin_voltages_kv={mp.bin_voltages_kv}\n"
-        f"[debug] bin_weights={mp.bin_weights}\n"
-        f"[debug] bin_pattern sums={[float(np.sum(b)) for b in mp.bin_patterns]}\n"
-        f"[debug] bin_pattern nonzeros={[int(np.count_nonzero(b)) for b in mp.bin_patterns]}\n"
-        f"[debug] integrated: sum={float(np.sum(mp.integrated)):.6e} "
-        f"nonzero={int(np.count_nonzero(mp.integrated))}/{mp.integrated.size}\n"
-        f"[debug] pattern: sum={float(np.sum(mp.pattern)):.6e} "
-        f"nonzero={int(np.count_nonzero(mp.pattern))}/{mp.pattern.size}\n"
-        f"[debug] meta: mode={meta.get('smith_iterative_mode')} "
-        f"n_bins_run={meta.get('n_bins_run')} "
-        f"stopped={meta.get('stopped_by_relative_change')} "
-        f"last_rel={meta.get('last_relative_change')} "
-        f"fail_k={meta.get('fail_k')} k_solved={meta.get('k_solved')} "
-        f"k_per_s={meta.get('k_per_s')} mc_bins={meta.get('n_mc_bins')}",
-        flush=True,
-    )
+    mc = surrogate_to_multi_voltage_mc(direct, 20.0)
+    kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
+    for mrb in (1, 2, 3):
+        result, meta = run_smith_iterative_voltage_integrated(
+            cell=cell,
+            mc=mc,
+            halfw=10,
+            dmin=0.05,
+            voltage_kv=20.0,
+            bethe_c_strong=1.0,
+            bethe_c_weak=1.0,
+            bethe_c_cutoff=1e3,
+            dbdiff_sg_cutoff=0.0,
+            kernels=kernels,
+            marginal_coverage=1.0,
+            max_bins_run=mrb,
+        )
+        integ = np.asarray(result.integrated, dtype=np.float64)
+        bins = [np.asarray(b, dtype=np.float64) for b in result.bin_patterns]
+        host = np.zeros_like(integ)
+        for b, w in zip(bins, result.bin_weights, strict=False):
+            host += float(w) * np.asarray(b, dtype=np.float64).reshape(-1)
+        print(
+            f"\n[debug] max_bins_run={mrb}: n_bins_run={result.n_bins_run} "
+            f"voltages={result.bin_voltages_kv} weights={result.bin_weights}\n"
+            f"[debug]   bin sums={[float(np.sum(b)) for b in bins]}\n"
+            f"[debug]   gpu integrated: sum={float(integ.sum()):.6e} "
+            f"nonzero={int(np.count_nonzero(integ))}/{integ.size}\n"
+            f"[debug]   host recombined: sum={float(host.sum()):.6e} "
+            f"nonzero={int(np.count_nonzero(host))}/{host.size}\n"
+            f"[debug]   meta: mode={meta.get('smith_iterative_mode')} "
+            f"fail_k={meta.get('fail_k')} k_solved={meta.get('k_solved')} "
+            f"stopped={result.stopped_by_relative_change} "
+            f"last_rel={result.last_relative_change}",
+            flush=True,
+        )
