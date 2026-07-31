@@ -33,24 +33,24 @@ def test_metal_accumulator_bisect() -> None:
     cell = build_cell_from_cif_path(_CIF)
     direct = infer_direct_exp_from_cell_rebinned(
         cell=cell,
-        sigma_deg=0.0,
+        sigma_deg=70.0,
         beam_kv=20.0,
         energy_binwidth_keV=5.0,
         n_energy_bins=4,
     )
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
-    for mrb in (1, 2, 3):
+    for mrb in (1, 2, 3, 4):
         result, meta = run_smith_iterative_voltage_integrated(
             cell=cell,
             mc=mc,
             halfw=10,
             dmin=0.05,
             voltage_kv=20.0,
-            bethe_c_strong=1.0,
-            bethe_c_weak=1.0,
-            bethe_c_cutoff=1e3,
-            dbdiff_sg_cutoff=0.0,
+            bethe_c_strong=20.0,
+            bethe_c_weak=40.0,
+            bethe_c_cutoff=200.0,
+            dbdiff_sg_cutoff=1.0,
             kernels=kernels,
             marginal_coverage=1.0,
             max_bins_run=mrb,
