@@ -13,6 +13,19 @@ from ebsdsim.gpu.pipelines import load_wgsl
 MAX_N_SMITH_ITERATIVE = 2048
 
 
+def _spack_to_f32(code: str) -> str:
+    """Rewrite the f16 spack (values + bit-packed meta) as f32.
+
+    Semantics-preserving: every read goes through f32(...)/u32(f32(...)) and
+    the packed meta integers (<=2048) are exact in both types. Used to A/B
+    Metal f16 workgroup behavior; doubles spack bytes, so buckets shrink.
+    """
+    code = code.replace("vec2<f16>", "vec2<f32>")
+    code = code.replace("f16(", "f32(")
+    code = code.replace("0.0h", "0.0")
+    return code
+
+
 def bucket_uniq_smith_iterative(
     code: str,
     n: int,
@@ -23,9 +36,12 @@ def bucket_uniq_smith_iterative(
     unique_seg_tile: int | None = None,
     force_dense_tile: bool = False,
     use_global_uniq_vals: bool = True,
+    use_f32: bool = False,
 ) -> tuple[str, str]:
     """String-replace MAX_N / MAX_PACK / MAX_UNIQ / BPT for the device budget."""
-    max_n, max_pack, max_uniq, bpt = bucket_params_for_n(n, shared_budget=shared_budget)
+    max_n, max_pack, max_uniq, bpt = bucket_params_for_n(
+        n, shared_budget=shared_budget, pack_entry_bytes=8 if use_f32 else 4
+    )
 
     def _sync_seg(c: str) -> str:
         # With global bitset/prefix, SEG may be up to MAX_PACK (full shared values).
@@ -54,7 +70,11 @@ def bucket_uniq_smith_iterative(
     code = code.replace("const MAX_UNIQ: u32 = 8600u;", f"const MAX_UNIQ: u32 = {max_uniq}u;")
     code = code.replace("const BPT: u32 = 2u;", f"const BPT: u32 = {bpt}u;")
     code = _sync_seg(code)
+    if use_f32:
+        code = _spack_to_f32(code)
     tag = f"{solver}_uniq_{max_n}_{max_pack}"
+    if use_f32:
+        tag = tag + "_f32"
     if force_dense_tile:
         tag = tag + "_denseforce"
     elif force_unique_seg_tile:
@@ -73,6 +93,7 @@ def load_smith_iterative_shader(
     unique_seg_tile: int | None = None,
     force_dense_tile: bool = False,
     use_global_uniq_vals: bool = True,
+    use_f32: bool = False,
 ) -> tuple[str, str]:
     """Load the beam-bucketed BiCGSTAB smith_iterative kernel (resident / unique-Δ / tile)."""
     name = "dynamical/smith_iterative_build_uniq_shared_bicgstab_f16.wgsl"
@@ -90,4 +111,5 @@ def load_smith_iterative_shader(
         unique_seg_tile=unique_seg_tile,
         force_dense_tile=force_dense_tile,
         use_global_uniq_vals=use_global_uniq_vals,
+        use_f32=use_f32,
     )

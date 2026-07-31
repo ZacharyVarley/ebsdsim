@@ -40,7 +40,7 @@ _CIF = Path(__file__).resolve().parents[1] / "data" / "cif" / f"{_STEM}.cif"
 pytestmark = pytest.mark.gpu
 
 
-def _direct(cell, bins):
+def _direct(cell, bins, use_f32=False):
     ctx = get_device(force=True, required_features=("shader-f16",))
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
     prep, bins = open_smith_iterative_prep(
@@ -49,7 +49,9 @@ def _direct(cell, bins):
     try:
         act = activate_voltage_bin(prep, bins[0])
         budget = int(prep.device.limits["max-compute-workgroup-storage-size"])
-        code, mode = load_smith_iterative_shader(int(act["n_strong"]), shared_budget=budget)
+        code, mode = load_smith_iterative_shader(
+            int(act["n_strong"]), shared_budget=budget, use_f32=use_f32
+        )
         tile = auto_tile_k(int(act["n_g"]), int(act["n_strong"]), int(act["n_weak"]), prep.n_sites)
         dyn = run_bins_dynamical(
             prep,
@@ -88,13 +90,14 @@ def test_metal_scalar_bisect() -> None:
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
     b0 = _voltage_bins_from_mc(mc)[0]
     configs = [
-        ("ALL1   ", VoltageBin(20.0, None, 1.0, 1.0, 1.0, 0)),
-        ("BETA   ", VoltageBin(20.0, None, b0.beta, 1.0, 1.0, 0)),
-        ("AMP    ", VoltageBin(20.0, None, 1.0, b0.amplitude, b0.energy_weight, 0)),
-        ("FULLMC ", VoltageBin(20.0, None, b0.beta, b0.amplitude, b0.energy_weight, 0)),
+        ("ALL1-f16   ", VoltageBin(20.0, None, 1.0, 1.0, 1.0, 0), False),
+        ("BETA-f16   ", VoltageBin(20.0, None, b0.beta, 1.0, 1.0, 0), False),
+        ("FULLMC-f16 ", VoltageBin(20.0, None, b0.beta, b0.amplitude, b0.energy_weight, 0), False),
+        ("BETA-f32   ", VoltageBin(20.0, None, b0.beta, 1.0, 1.0, 0), True),
+        ("FULLMC-f32 ", VoltageBin(20.0, None, b0.beta, b0.amplitude, b0.energy_weight, 0), True),
     ]
-    for name, vb in configs:
-        s, mode, fail_k, iters, mu, amp = _direct(cell, [vb])
+    for name, vb, use_f32 in configs:
+        s, mode, fail_k, iters, mu, amp = _direct(cell, [vb], use_f32=use_f32)
         print(
             f"[debug] {name} sum={s:.6e} mu={mu:.6f} amp={amp:.6e} "
             f"fail_k={fail_k} iters={iters} mode={mode}",

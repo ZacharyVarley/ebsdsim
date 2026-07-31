@@ -77,14 +77,15 @@ DEFAULT_SHARED_BUDGET = 49152
 
 
 def bucket_params_for_n(
-    n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET
+    n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET, pack_entry_bytes: int = 4
 ) -> tuple[int, int, int, int]:
     """(MAX_N, MAX_PACK, MAX_UNIQ, BPT) for beam count ``n``.
 
     Pack sizes are capped so the workgroup arrays fit ``shared_budget`` bytes
     (the device limit), so small-budget devices slide down the pack ladder
     (resident → unique-Δ → unique-seg → dense tile) instead of failing
-    pipeline creation.
+    pipeline creation. ``pack_entry_bytes`` is 4 for the f16 spack variant
+    and 8 for the f32 variant (used to A/B Metal f16 behavior).
     """
     n = int(n)
     if n <= 1024:
@@ -99,10 +100,11 @@ def bucket_params_for_n(
             f"smith_iterative shader supports at most {MAX_BEAMS} beams "
             f"(Krylov workgroup arrays), got {n}"
         )
-    avail = (int(shared_budget) - max_n * 16 - _OVERHEAD_BYTES) // 4
+    entry = max(4, int(pack_entry_bytes))
+    avail = (int(shared_budget) - max_n * 16 - _OVERHEAD_BYTES) // entry
     if avail < _MIN_PACK:
         raise ValueError(
-            f"n={n} beams needs {max_n * 16 + _OVERHEAD_BYTES + _MIN_PACK * 4} B "
+            f"n={n} beams needs {max_n * 16 + _OVERHEAD_BYTES + _MIN_PACK * entry} B "
             f"of workgroup storage but the device allows {shared_budget} B"
         )
     if pack:
