@@ -48,9 +48,10 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run GPU tests
-        # Per-test timeout: a stuck GPU sync must fail fast with a stack,
-        # not burn the runner for hours.
-        run: pytest -q --timeout=300
+        # Per-test timeout: a stuck GPU sync must fail fast, not burn the
+        # runner for hours. thread method: signal-based timeouts cannot
+        # interrupt a thread blocked inside a native (CFFI) call.
+        run: pytest -q --timeout=300 --timeout-method=thread
 
   build:
     name: Build wheel
