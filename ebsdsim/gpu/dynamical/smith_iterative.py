@@ -112,7 +112,7 @@ def _pack_k_vec4(kvecs: NDArray[np.float32]) -> NDArray[np.float32]:
     return out.reshape(-1)
 
 
-def _slim_workspace(kernels, *, B: int, n_g: int, n: int, n_w: int, n_sites: int) -> SimpleNamespace:
+def _slim_workspace(kernels, *, B: int, n_g: int, n: int, n_w: int, n_sites: int, rank: int) -> SimpleNamespace:
     dev, q = kernels.device, kernels.queue
 
     def sb(label: str, nbytes: int, *, copy_src: bool = False) -> StorageBuffer:
@@ -130,7 +130,7 @@ def _slim_workspace(kernels, *, B: int, n_g: int, n: int, n_w: int, n_sites: int
         d_a=sb("hp:dA", c64_bytes(B * n)),
         e0=sb("hp:e0", c64_bytes(B * n)),
         q_values=sb("hp:q", f32_bytes(B * 4)),
-        w_stack=sb("hp:w", c64_bytes(B * n * RANK)),
+        w_stack=sb("hp:w", c64_bytes(B * n * rank)),
         intensities=sb("hp:I", f32_bytes(B * n_sites), copy_src=True),
     )
 
@@ -164,6 +164,7 @@ def run_bins_dynamical(
     queue_depth: int = 4,
     fuse_gather_slim: bool = True,
     relative_image_stop: float = 0.01,
+    rank: int = RANK,
 ) -> dict:
     """Integrate voltage bins; return integrated + per-bin intensity stacks.
 
@@ -267,7 +268,7 @@ def run_bins_dynamical(
             chunk = int(max_chunk_uniq)
 
     ws = _slim_workspace(
-        kernels, B=chunk, n_g=n_g, n=n, n_w=max(n_w, 1), n_sites=n_sites
+        kernels, B=chunk, n_g=n_g, n=n, n_w=max(n_w, 1), n_sites=n_sites, rank=rank
     )
     stats = StorageBuffer(
         device, queue, label="hp:stats", data=np.zeros(chunk * 2, dtype=np.uint32), copy_src=True
@@ -366,7 +367,7 @@ def run_bins_dynamical(
         n = max(n, n_s)
         n_w = max(n_w, n_wk)
         ws = _slim_workspace(
-            kernels, B=chunk, n_g=n_g, n=n, n_w=max(n_w, 1), n_sites=n_sites
+            kernels, B=chunk, n_g=n_g, n=n, n_w=max(n_w, 1), n_sites=n_sites, rank=rank
         )
         # Resource set changed → drop cached bind groups.
         submitter._bind_groups.clear()
@@ -475,6 +476,7 @@ def run_bins_dynamical(
                         bethe_c_weak=prep.bethe_c_weak,
                         mu=mu,
                         amp=amp,
+                        rank=rank,
                         bl=bl,
                         lu=lu,
                         pref=pref,

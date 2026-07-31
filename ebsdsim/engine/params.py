@@ -24,7 +24,7 @@ class SimParams:
     sigma_deg: float = 70.0
     omega_deg: float = 0.0
     solver: SolverName = "smith_iterative"
-    rank: int = 20
+    rank: int = 16
     exact_slow_cpu: bool = False
     verbosity: int = 0
     chunk_size: int = 256

@@ -43,13 +43,13 @@ def smith_iterative_code_digest(code: str) -> str:
     return hashlib.blake2b(code.encode(), digest_size=8).hexdigest()
 
 
-def pack_implicit_bicg(batch: int, n: int, lu, pref) -> bytes:
+def pack_implicit_bicg(batch: int, n: int, lu, pref, *, rank: int = RANK) -> bytes:
     # Matches scratch/other_viewpoints ImplicitBicgstabSmith.dispatch packing.
     return struct.pack(
         "<IIIIfIiIffff",
         batch,
         n,
-        RANK,
+        rank,
         MAX_ITER,
         float(ATOL),
         int(lu.table_size),
@@ -62,13 +62,13 @@ def pack_implicit_bicg(batch: int, n: int, lu, pref) -> bytes:
     )
 
 
-def pack_smith_iterative(batch: int, n: int, bl: np.ndarray, lu, pref) -> bytes:
+def pack_smith_iterative(batch: int, n: int, bl: np.ndarray, lu, pref, *, rank: int = RANK) -> bytes:
     b = np.asarray(bl, dtype=np.float32).reshape(3, 3)
     return struct.pack(
         "<IIIIfiiiIIfffffffffff",
         batch,
         n,
-        RANK,
+        rank,
         MAX_ITER,
         float(ATOL),
         int(lu.table_size),
@@ -130,6 +130,7 @@ class TileDispatchCtx:
     bethe_c_weak: float
     mu: float
     amp: float
+    rank: int
     bl: NDArray[np.float32]
     lu: Any
     pref: Any
@@ -308,9 +309,9 @@ def build_tile_dispatch(ctx: TileDispatchCtx) -> list[DispatchItem]:
                 key=f"hp:smith_iterative:{smith_iterative_code_digest(ctx.code_smith_iterative)}:n{n_use}",
                 code=ctx.code_smith_iterative,
                 params_data=(
-                    pack_implicit_bicg(rows, n_use, lu, pref)
+                    pack_implicit_bicg(rows, n_use, lu, pref, rank=ctx.rank)
                     if ctx.uses_implicit_bicg
-                    else pack_smith_iterative(rows, n_use, ctx.bl, lu, pref)
+                    else pack_smith_iterative(rows, n_use, ctx.bl, lu, pref, rank=ctx.rank)
                 ),
                 resources=(
                     [
@@ -359,7 +360,7 @@ def build_tile_dispatch(ctx: TileDispatchCtx) -> list[DispatchItem]:
                     "<4I4i4I4f",
                     rows,
                     n_use,
-                    RANK,
+                    ctx.rank,
                     n_sites,
                     int(lu.stride_h),
                     int(lu.stride_k),

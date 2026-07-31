@@ -59,6 +59,7 @@ def run_smith_iterative_voltage_integrated(
     relative_image_stop: float = 0.01,
     max_bins_run: int | None = None,
     max_chunks: int | None = None,
+    rank: int = 16,
 ) -> tuple[MasterPatternIntegratedResult, dict[str, Any]]:
     """Run multi-bin Smith iterative integrate; return FS intensities + dyn stats."""
     mc_trim = trim_multi_voltage_mc_by_coverage(mc, marginal_coverage)
@@ -114,6 +115,7 @@ def run_smith_iterative_voltage_integrated(
             queue_depth=queue_depth,
             relative_image_stop=relative_image_stop,
             max_chunks=max_chunks,
+            rank=rank,
         )
     finally:
         prep.close()

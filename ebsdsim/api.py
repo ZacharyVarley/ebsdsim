@@ -130,7 +130,7 @@ def master_pattern(
     sigma_deg: float = 70.0,
     omega_deg: float = 0.0,
     solver: Literal["smith_iterative", "lu_smith"] = "smith_iterative",
-    rank: int = 20,
+    rank: int = 16,
     exact_slow_cpu: bool = False,
     verbosity: int = 0,
     chunk_size: int = 256,
@@ -170,7 +170,8 @@ def master_pattern(
     solver : {"smith_iterative", "lu_smith"}
         Dynamical backend (default ``smith_iterative``).
     rank : int
-        Smith / Lyapunov rank for ``lu_smith`` / ``exact_slow_cpu``.
+        Smith / Lyapunov rank (default 16; ``smith_iterative`` currently
+        supports only 16, ``lu_smith`` accepts higher).
     exact_slow_cpu : bool
         Full-rank CPU Lyapunov instead of GPU Smith.
     verbosity : {0, 1, 2}

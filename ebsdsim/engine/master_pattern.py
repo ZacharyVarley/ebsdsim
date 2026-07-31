@@ -236,6 +236,12 @@ def _run_smith_iterative(
     from ebsdsim.engine.smith_iterative_runner import run_smith_iterative_voltage_integrated
     from ebsdsim.gpu.raster import GpuLambertRasterizer, build_master_pattern_data_gpu
 
+    rank = int(params.rank)
+    if rank != 16:
+        raise ValueError(
+            f"smith_iterative solver currently supports rank=16 (the intensity "
+            f"contraction shader has a compile-time MAX_RANK=16), got rank={rank}."
+        )
     grid_size = 1 + 2 * params.halfw
     ctx = require_gpu(required_features=("shader-f16",))
     kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
@@ -261,6 +267,7 @@ def _run_smith_iterative(
             relative_image_stop=params.relative_image_stop,
             max_bins_run=max_bins_run,
             max_chunks=max_chunks,
+            rank=int(params.rank),
         )
         pg_grid = smith_iterative_meta["pg_grid"]
         n_k = int(integrated_result.n_k)
@@ -307,7 +314,7 @@ def _run_smith_iterative(
         axes=axes,
         kij=kij,
         solver_label="smith_iterative",
-        rank=16,
+        rank=int(params.rank),
         exact_slow_cpu=False,
         structure_meta=structure_meta,
         extras=extras,
