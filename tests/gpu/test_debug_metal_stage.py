@@ -75,7 +75,7 @@ def _ws_capture(kernels, *, B, n_g, n, n_w, n_sites):
     return ws
 
 
-def _run(stem: str, vb: VoltageBin, floor: float | None) -> str:
+def _run(stem: str, vb: VoltageBin, floor: float | None, chunk_cap: int = 2048) -> str:
     cell = build_cell_from_cif_path(_CIF_DIR / f"{stem}.cif")
     get_device(force=True, required_features=("shader-f16",))
     ctx = get_device(required_features=("shader-f16",))
@@ -97,13 +97,12 @@ def _run(stem: str, vb: VoltageBin, floor: float | None) -> str:
         dyn = si.run_bins_dynamical(
             prep,
             bins,
-            chunk=min(tile, 2048),
+            chunk=min(tile, chunk_cap),
             code_topk=_orig_load("dynamical/topk_radix_exact.wgsl"),
             code_slim=si.load_wgsl("dynamical/smith_iterative_slim_q.wgsl"),
             code_smith_iterative=code,
             code_inten=_orig_load("dynamical/intensity_fused_exact.wgsl"),
             first_act=act,
-            max_chunks=1,
             queue_depth=1,
             collect_stats=True,
         )
@@ -111,7 +110,7 @@ def _run(stem: str, vb: VoltageBin, floor: float | None) -> str:
         rows = min(int(B), 528)
         qv = ws.q_values.read_as(np.float32).reshape(int(B), 4)[:rows]
         w = ws.w_stack.read_as(np.float32).reshape(int(B), si.RANK, int(n), 2)[:rows]
-        st = np.asarray(dyn["mode_flags"], dtype=np.uint32).ravel()[:rows]
+        st = np.asarray(dyn["mode_flags"], dtype=np.uint32).ravel()[: int(B)]
         fail = int(np.sum(st == 0xFFFFFFFF))
         it = (st[st != 0xFFFFFFFF] & 0x0FFFFFFF).astype(np.int64)
         it_txt = f"max={it.max()} med={int(np.median(it))}" if it.size else "n/a"
@@ -129,7 +128,13 @@ def _run(stem: str, vb: VoltageBin, floor: float | None) -> str:
         kernels.destroy()
 
 
-def test_metal_conditioning() -> None:
+def test_metal_submit_size() -> None:
+    """q_values/stats read back as zero-init => the submit was aborted, not miscomputed.
+
+    Shrinking the k-chunk shortens each command buffer without changing any
+    numerics. If small chunks land, the Metal command buffer is being killed
+    on long submits.
+    """
     try:
         require_gpu(required_features=("shader-f16",))
     except RuntimeError:
@@ -141,7 +146,9 @@ def test_metal_conditioning() -> None:
         )
         b0 = _voltage_bins_from_mc(surrogate_to_multi_voltage_mc(d, 20.0))[0]
         vb = VoltageBin(20.0, None, b0.beta, 1.0, 1.0, 0)
-        for floor in (None, 0.1, 0.25):
-            fl = "none " if floor is None else f"{floor:.2f} "
-            print(f"[debug] {stem}({tag}) qfloor={fl} {_run(stem, vb, floor)}", flush=True)
+        for chunk in (2048, 128, 32):
+            print(
+                f"[debug] {stem}({tag}) chunk={chunk:<5d} {_run(stem, vb, None, chunk)}",
+                flush=True,
+            )
     raise AssertionError("probe complete - see [debug] annotations")
