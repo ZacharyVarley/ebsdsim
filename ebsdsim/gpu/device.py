@@ -56,8 +56,8 @@ def _patch_wgpu_0320_work_done() -> None:
     if wgpu.__version__ != "0.32.0":
         return
     from wgpu.backends.wgpu_native._api import (  # noqa: PLC0415
-        GPUQueue,
         GPUPromise,
+        GPUQueue,
         ffi,
         lib,
         libf,
