@@ -15,11 +15,12 @@ _CIF_PATHS = sorted(_CIF_DIR.glob("sg_*.cif"))
 assert _CIF_PATHS, f"no CIF fixtures under {_CIF_DIR}"
 
 # Cells that deterministically produce an all-zero pattern on Apple Silicon
-# Metal (upstream wgpu-native pre-v30 class: 6/6 fresh-device draws zero while
-# the identical shader constants are bit-correct on D3D12). Repro archived at
-# scratch/metal_sg004_repro.py. xfail is macOS-only and non-strict so an xpass
-# (e.g. fixed wgpu-native) is visible without breaking the suite.
-_METAL_ZERO_CIFS = {"sg_004_1004038"}
+# Metal (upstream wgpu-native pre-v30 class: sg_004 failed 6/6 fresh-device
+# draws, sg_168 3/3, while identical shader constants are bit-correct on
+# D3D12). These are the two largest-footprint cells in the suite. Repro
+# archived at scratch/metal_sg004_repro.py. xfail is macOS-only and
+# non-strict so an xpass (e.g. fixed wgpu-native) stays visible.
+_METAL_ZERO_CIFS = {"sg_004_1004038", "sg_168_2232341"}
 
 
 def _suite_params() -> list:
