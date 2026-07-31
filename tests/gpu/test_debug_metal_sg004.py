@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import ebsdsim as es
 import numpy as np
 import pytest
-
-import ebsdsim as es
 from ebsdsim.gpu.device import get_device, require_gpu
 
 _CIF = Path(__file__).resolve().parents[1] / "data" / "cif" / "sg_004_1004038.cif"
