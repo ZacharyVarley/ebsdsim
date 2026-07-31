@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ebsdsim.gpu.dynamical.ladder import DEFAULT_SHARED_BUDGET, bucket_params_for_n
 from ebsdsim.gpu.pipelines import load_wgsl
 
 # Krylov still keeps ss/sord/sp in workgroup memory sized MAX_N. Pack TILE has
-# no plen ceiling, but beam count is capped by ~48 KiB shared (ss+sord+sp+spack).
+# no plen ceiling, but beam count is capped by the device workgroup-storage
+# budget (ss+sord+sp+spack).
 MAX_N_SMITH_ITERATIVE = 2048
 
 
@@ -16,15 +18,16 @@ def bucket_uniq_smith_iterative(
     n: int,
     *,
     solver: str,
+    shared_budget: int = DEFAULT_SHARED_BUDGET,
     force_unique_seg_tile: bool = False,
     unique_seg_tile: int | None = None,
     force_dense_tile: bool = False,
     use_global_uniq_vals: bool = True,
 ) -> tuple[str, str]:
-    """String-replace MAX_N / MAX_PACK / MAX_UNIQ / BPT for ~48 KB buckets."""
-    n = int(n)
+    """String-replace MAX_N / MAX_PACK / MAX_UNIQ / BPT for the device budget."""
+    max_n, max_pack, max_uniq, bpt = bucket_params_for_n(n, shared_budget=shared_budget)
 
-    def _sync_seg(c: str, max_uniq: int, max_pack: int) -> str:
+    def _sync_seg(c: str) -> str:
         # With global bitset/prefix, SEG may be up to MAX_PACK (full shared values).
         seg = int(unique_seg_tile) if unique_seg_tile is not None else max_pack
         seg = max(1, min(seg, max_pack))
@@ -46,46 +49,12 @@ def bucket_uniq_smith_iterative(
             )
         return c
 
-    if n <= 384:
-        code = _sync_seg(code, 8600, 10200)
-        tag = f"{solver}_uniq_384"
-    elif n <= 512:
-        code = code.replace("const MAX_N: u32 = 384u;", "const MAX_N: u32 = 512u;")
-        code = code.replace("const MAX_PACK: u32 = 10200u;", "const MAX_PACK: u32 = 9690u;")
-        code = code.replace("const MAX_UNIQ: u32 = 8600u;", "const MAX_UNIQ: u32 = 8100u;")
-        code = _sync_seg(code, 8100, 9690)
-        tag = f"{solver}_uniq_512"
-    elif n <= 768:
-        code = code.replace("const MAX_N: u32 = 384u;", "const MAX_N: u32 = 768u;")
-        code = code.replace("const MAX_PACK: u32 = 10200u;", "const MAX_PACK: u32 = 8600u;")
-        code = code.replace("const MAX_UNIQ: u32 = 8600u;", "const MAX_UNIQ: u32 = 7000u;")
-        code = code.replace("const BPT: u32 = 2u;", "const BPT: u32 = 3u;")
-        code = _sync_seg(code, 7000, 8600)
-        tag = f"{solver}_uniq_768"
-    elif n <= 1024:
-        code = code.replace("const MAX_N: u32 = 384u;", "const MAX_N: u32 = 1024u;")
-        code = code.replace("const MAX_PACK: u32 = 10200u;", "const MAX_PACK: u32 = 7600u;")
-        code = code.replace("const MAX_UNIQ: u32 = 8600u;", "const MAX_UNIQ: u32 = 6000u;")
-        code = code.replace("const BPT: u32 = 2u;", "const BPT: u32 = 4u;")
-        code = _sync_seg(code, 6000, 7600)
-        tag = f"{solver}_uniq_1024"
-    elif n <= MAX_N_SMITH_ITERATIVE:
-        # Overflow: pad to WG multiple, shrink pack to keep ~48 KiB shared.
-        # Shared unique meta needs ~1564 slots beyond MAX_UNIQ; remainder is TILE/useg.
-        max_n = ((n + 255) // 256) * 256
-        bpt = max_n // 256
-        max_pack = max(1024, (48000 - max_n * 16 - 2200) // 4)
-        max_uniq = max(0, max_pack - 1564)
-        code = code.replace("const MAX_N: u32 = 384u;", f"const MAX_N: u32 = {max_n}u;")
-        code = code.replace("const MAX_PACK: u32 = 10200u;", f"const MAX_PACK: u32 = {max_pack}u;")
-        code = code.replace("const MAX_UNIQ: u32 = 8600u;", f"const MAX_UNIQ: u32 = {max_uniq}u;")
-        code = code.replace("const BPT: u32 = 2u;", f"const BPT: u32 = {bpt}u;")
-        code = _sync_seg(code, max_uniq, max_pack)
-        tag = f"{solver}_uniq_{max_n}"
-    else:
-        raise ValueError(
-            f"smith_iterative shader supports at most {MAX_N_SMITH_ITERATIVE} beams (Krylov workgroup arrays), got {n}"
-        )
+    code = code.replace("const MAX_N: u32 = 384u;", f"const MAX_N: u32 = {max_n}u;")
+    code = code.replace("const MAX_PACK: u32 = 10200u;", f"const MAX_PACK: u32 = {max_pack}u;")
+    code = code.replace("const MAX_UNIQ: u32 = 8600u;", f"const MAX_UNIQ: u32 = {max_uniq}u;")
+    code = code.replace("const BPT: u32 = 2u;", f"const BPT: u32 = {bpt}u;")
+    code = _sync_seg(code)
+    tag = f"{solver}_uniq_{max_n}_{max_pack}"
     if force_dense_tile:
         tag = tag + "_denseforce"
     elif force_unique_seg_tile:
@@ -99,6 +68,7 @@ def load_smith_iterative_shader(
     n: int,
     wgsl_dir: Path | None = None,
     *,
+    shared_budget: int = DEFAULT_SHARED_BUDGET,
     force_unique_seg_tile: bool = False,
     unique_seg_tile: int | None = None,
     force_dense_tile: bool = False,
@@ -115,6 +85,7 @@ def load_smith_iterative_shader(
         code,
         n,
         solver=solver,
+        shared_budget=shared_budget,
         force_unique_seg_tile=force_unique_seg_tile,
         unique_seg_tile=unique_seg_tile,
         force_dense_tile=force_dense_tile,

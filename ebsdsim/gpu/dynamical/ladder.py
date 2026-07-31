@@ -54,35 +54,72 @@ from numpy.typing import NDArray
 MAX_PLEN_FOR_UNIQ_TRY = 65536
 MAX_PLEN_SHARED_META = 20000
 MAX_NU_CAP = 16384
+MAX_BEAMS = 2048
+
+# Bucket table: (MAX_N, MAX_PACK, MAX_UNIQ, BPT). Tuned so ss/sord/sp
+# (MAX_N*16 B) + spack (MAX_PACK*4 B) + fixed arrays (~2.2 KB) fit a
+# 48 KiB workgroup-storage budget — the D3D12-class device limit. The real
+# budget comes from device.limits["max-compute-workgroup-storage-size"];
+# buckets shrink to fit smaller budgets (e.g. 32 KiB Metal devices).
+_BUCKET_TABLE = (
+    (384, 10200, 8600, 2),
+    (512, 9690, 8100, 2),
+    (768, 8600, 7000, 3),
+    (1024, 7600, 6000, 4),
+)
+# red_re/red_im (2*256*4 B) + geom (128 B) + scalars.
+_OVERHEAD_BYTES = 2200
+_MIN_PACK = 1024
+# Shared unique meta (META_BITS_SLOTS 939 + MAX_UWORDS_SHARED 625) packed into
+# the spack tail beyond MAX_UNIQ.
+_META_SLOTS = 1564
+DEFAULT_SHARED_BUDGET = 49152
 
 
-def max_pack_for_n(n: int) -> int:
-    if n <= 384:
-        return 10200
-    if n <= 512:
-        return 9690
-    if n <= 768:
-        return 8600
+def bucket_params_for_n(
+    n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET
+) -> tuple[int, int, int, int]:
+    """(MAX_N, MAX_PACK, MAX_UNIQ, BPT) for beam count ``n``.
+
+    Pack sizes are capped so the workgroup arrays fit ``shared_budget`` bytes
+    (the device limit), so small-budget devices slide down the pack ladder
+    (resident → unique-Δ → unique-seg → dense tile) instead of failing
+    pipeline creation.
+    """
+    n = int(n)
     if n <= 1024:
-        return 7600
-    if n <= 2048:
-        max_n = ((int(n) + 255) // 256) * 256
-        return max(1024, (48000 - max_n * 16 - 2200) // 4)
-    return 0
+        for max_n, pack, uniq, bpt in _BUCKET_TABLE:
+            if n <= max_n:
+                break
+    elif n <= MAX_BEAMS:
+        max_n = ((n + 255) // 256) * 256
+        pack, uniq, bpt = 0, 0, max_n // 256
+    else:
+        raise ValueError(
+            f"smith_iterative shader supports at most {MAX_BEAMS} beams "
+            f"(Krylov workgroup arrays), got {n}"
+        )
+    avail = (int(shared_budget) - max_n * 16 - _OVERHEAD_BYTES) // 4
+    if avail < _MIN_PACK:
+        raise ValueError(
+            f"n={n} beams needs {max_n * 16 + _OVERHEAD_BYTES + _MIN_PACK * 4} B "
+            f"of workgroup storage but the device allows {shared_budget} B"
+        )
+    if pack:
+        max_pack = max(_MIN_PACK, min(pack, avail))
+        max_uniq = max(0, min(uniq, max_pack - _META_SLOTS))
+    else:
+        max_pack = max(_MIN_PACK, avail)
+        max_uniq = max(0, max_pack - _META_SLOTS)
+    return max_n, max_pack, max_uniq, bpt
 
 
-def max_uniq_for_n(n: int) -> int:
-    if n <= 384:
-        return 8600
-    if n <= 512:
-        return 8100
-    if n <= 768:
-        return 7000
-    if n <= 1024:
-        return 6000
-    if n <= 2048:
-        return max(0, max_pack_for_n(n) - 1564)
-    return 0
+def max_pack_for_n(n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET) -> int:
+    return bucket_params_for_n(n, shared_budget=shared_budget)[1]
+
+
+def max_uniq_for_n(n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET) -> int:
+    return bucket_params_for_n(n, shared_budget=shared_budget)[2]
 
 
 # Back-compat aliases

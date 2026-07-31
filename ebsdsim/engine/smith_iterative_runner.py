@@ -86,7 +86,10 @@ def run_smith_iterative_voltage_integrated(
     code_slim = load_wgsl("dynamical/smith_iterative_slim_q.wgsl")
     code_inten = load_wgsl("dynamical/intensity_fused_exact.wgsl")
     first = activate_voltage_bin(prep, bins[0])
-    code_smith_iterative, smith_iterative_mode = load_smith_iterative_shader(int(first["n_strong"]))
+    shared_budget = int(prep.device.limits["max-compute-workgroup-storage-size"])
+    code_smith_iterative, smith_iterative_mode = load_smith_iterative_shader(
+        int(first["n_strong"]), shared_budget=shared_budget
+    )
     tile = auto_tile_k(
         int(first["n_g"]), int(first["n_strong"]), int(first["n_weak"]), prep.n_sites
     )
