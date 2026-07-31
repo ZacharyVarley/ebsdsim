@@ -54,12 +54,12 @@ def test_mc_auto_stop_converges_within_bounds():
         auto_stop=True,
         relative_tol=0.05,
         min_trajectories=262_144,
-        max_trajectories=4_194_304,
+        max_trajectories=1_048_576,
         batch_size=262_144,
     )
     # Auto-stop must respect the trajectory bounds and report diagnostics.
     assert mc.n_trajectories >= 262_144
-    assert mc.n_trajectories <= 4_194_304
+    assert mc.n_trajectories <= 1_048_576
     assert mc.n_convergence_checks >= 1
     if mc.converged:
         assert mc.last_relative_change <= 0.05

@@ -29,7 +29,7 @@ def _gan_cif():
     return importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif")
 
 
-def _gan_pattern(*, solver: str, halfw: int = 17):
+def _gan_pattern(*, solver: str, halfw: int = 8):
     kwargs: dict = dict(
         voltage_kv=20.0,
         halfw=halfw,
@@ -172,7 +172,7 @@ def test_lambert_data_display_scaling(tmp_path):
 
 @pytest.mark.slow
 def test_master_pattern_lambert_data_method():
-    mp = _gan_pattern(solver="lu_smith", halfw=17)
+    mp = _gan_pattern(solver="lu_smith", halfw=8)
     assert np.allclose(mp.data, mp.lambert_data()[0])
     disp, _ = mp.lambert_data(normalize="minmax")
     assert not np.allclose(mp.data, disp)

@@ -42,7 +42,7 @@ def _run(cif: Path, *, solver: str) -> es.MasterPattern:
     return es.master_pattern_from_cif(
         cif,
         voltage_kv=20.0,
-        halfw=15,
+        halfw=12,
         dmin=0.05,
         energy_binwidth_keV=20.0,
         marginal_coverage=1.0,
