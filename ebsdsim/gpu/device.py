@@ -109,10 +109,21 @@ def get_device(
     """
     global _context, _context_features
     want = frozenset(required_features or ())
-    if _context is not None and not force:
+    old = _context
+    if old is not None and not force:
         if want <= (_context_features or frozenset()):
-            return _context
+            return old
         # Cached device lacks newly required features — reopen.
+    if old is not None:
+        # Tear down the previous device explicitly rather than leaving it to
+        # GC: on Metal, lingering native devices keep corrupting adapter-level
+        # completion state for their successors.
+        try:
+            old.device.destroy()
+        except Exception:  # noqa: BLE001
+            pass
+        _context = None
+        _context_features = None
     adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
     if adapter is None:
         raise RuntimeError("No WebGPU adapter available")

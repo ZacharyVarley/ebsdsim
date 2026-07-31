@@ -52,6 +52,7 @@ Changelog = "https://github.com/ZacharyVarley/ebsdsim/blob/main/CHANGELOG.md"
 dev = [
   "build>=1.0",
   "pytest>=7.0",
+  "pytest-rerunfailures>=14.0",
   "pytest-timeout>=2.2",
   "import-linter>=2.0",
   "ruff>=0.6",

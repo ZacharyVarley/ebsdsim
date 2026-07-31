@@ -5,6 +5,21 @@ import sys
 import pytest
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Allow GPU tests two reruns on macOS.
+
+    A freshly created Metal device is *usually* clean but not always —
+    the same pre-v30 wgpu-native corruption occasionally zeroes reads even
+    on a new device. Reruns re-draw a fresh device via the fixture below,
+    making a corrupt draw on every attempt vanishingly unlikely.
+    """
+    if sys.platform != "darwin":
+        return
+    flaky = pytest.mark.flaky(reruns=2)
+    for item in items:
+        item.add_marker(flaky)
+
+
 @pytest.fixture(autouse=True)
 def _fresh_device_on_metal() -> None:
     """Force a fresh WebGPU device before each test on macOS.
