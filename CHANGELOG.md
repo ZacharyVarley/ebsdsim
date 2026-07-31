@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   device starts clean. Library code is unchanged — long-lived single-device
   sessions are unaffected on other platforms, and `get_device(force=True)`
   is available as an escape hatch on macOS.
+- macOS/Metal: one e2e fixture (`sg_004_1004038`) is xfailed on macOS only.
+  It deterministically produces an all-zero pattern under Apple Silicon
+  Metal (six of six fresh-device attempts) while the identical shader
+  constants are bit-correct on D3D12 — the same upstream pre-v30
+  wgpu-native Metal class as above, not a library defect. Repro archived at
+  `scratch/metal_sg004_repro.py`; the xfail is non-strict so a fixed
+  wgpu-native surfaces as an xpass.
 
 ## [0.2.1] - 2026-07-30
 

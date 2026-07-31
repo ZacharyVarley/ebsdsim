@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import ebsdsim as es
@@ -12,6 +13,31 @@ from ebsdsim.gpu.device import require_gpu
 _CIF_DIR = Path(__file__).resolve().parents[1] / "data" / "cif"
 _CIF_PATHS = sorted(_CIF_DIR.glob("sg_*.cif"))
 assert _CIF_PATHS, f"no CIF fixtures under {_CIF_DIR}"
+
+# Cells that deterministically produce an all-zero pattern on Apple Silicon
+# Metal (upstream wgpu-native pre-v30 class: 6/6 fresh-device draws zero while
+# the identical shader constants are bit-correct on D3D12). Repro archived at
+# scratch/metal_sg004_repro.py. xfail is macOS-only and non-strict so an xpass
+# (e.g. fixed wgpu-native) is visible without breaking the suite.
+_METAL_ZERO_CIFS = {"sg_004_1004038"}
+
+
+def _suite_params() -> list:
+    params = []
+    for p in _CIF_PATHS:
+        marks = []
+        if sys.platform == "darwin" and p.stem in _METAL_ZERO_CIFS:
+            marks.append(
+                pytest.mark.xfail(
+                    reason=(
+                        "deterministic all-zero output on Apple Silicon Metal "
+                        "(upstream wgpu-native pre-v30); correct on D3D12"
+                    ),
+                    strict=False,
+                )
+            )
+        params.append(pytest.param(p, marks=marks, id=p.stem))
+    return params
 
 
 def _gpu_smith_iterative_available() -> bool:
@@ -32,7 +58,7 @@ pytestmark = [
 ]
 
 
-@pytest.mark.parametrize("cif_path", _CIF_PATHS, ids=[p.stem for p in _CIF_PATHS])
+@pytest.mark.parametrize("cif_path", _suite_params())
 def test_master_pattern_cif_suite_halfw10(cif_path: Path) -> None:
     """Smith iterative E2E on each suite CIF at halfw=10 (21×21 Lambert)."""
     mp = es.master_pattern_from_cif(
