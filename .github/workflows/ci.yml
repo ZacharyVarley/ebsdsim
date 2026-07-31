@@ -48,11 +48,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run GPU tests
-        # TEMPORARY: narrowed to the Metal unique-seg debug probe while the
-        # sg_003_1536903 all-zero failure is being root-caused. Restore the
-        # full `pytest -v -x --tb=short --timeout=300 --timeout-method=thread`
-        # selection afterwards.
-        run: pytest tests/gpu/test_debug_metal_useg.py -v -s --timeout=300 --timeout-method=thread
+        run: pytest -v --tb=short --timeout=300 --timeout-method=thread
 
   build:
     name: Build wheel

@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signature (its bundled wgpu-native v29 added a `WGPUStringView`
   parameter the Python codegen missed). The shim activates only on
   wgpu-py 0.32.0.
+- macOS/Metal: the GPU test suite now runs each test on a fresh WebGPU
+  device. Pre-v30 wgpu-native Metal accumulates corrupted completion state
+  across repeated pipeline/buffer create-destroy cycles on one device,
+  making reads intermittently return zeros later in a process; a fresh
+  device starts clean. Library code is unchanged — long-lived single-device
+  sessions are unaffected on other platforms, and `get_device(force=True)`
+  is available as an escape hatch on macOS.
 
 ## [0.2.1] - 2026-07-30
 
