@@ -17,7 +17,7 @@ from ebsdsim.crystal.build import build_cell_from_cif_path
 from ebsdsim.energy.surrogate import infer_direct_exp_from_cell_rebinned
 from ebsdsim.engine.integrate import surrogate_to_multi_voltage_mc
 from ebsdsim.engine.smith_iterative_runner import run_smith_iterative_voltage_integrated
-from ebsdsim.gpu.device import require_gpu
+from ebsdsim.gpu.device import get_device, require_gpu
 from ebsdsim.gpu.dynamical.kernels import EBSDDynamicalKernels
 
 _CIF = Path(__file__).resolve().parents[1] / "data" / "cif" / "sg_003_1536903.cif"
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.gpu
 
 def test_metal_accumulator_bisect() -> None:
     try:
-        ctx = require_gpu(required_features=("shader-f16",))
+        require_gpu(required_features=("shader-f16",))
     except RuntimeError:
         pytest.skip("WebGPU adapter with shader-f16 unavailable")
     cell = build_cell_from_cif_path(_CIF)
@@ -40,6 +40,7 @@ def test_metal_accumulator_bisect() -> None:
     )
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
     for iteration in range(5):
+        ctx = get_device(force=True, required_features=("shader-f16",))
         kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
         try:
             result, meta = run_smith_iterative_voltage_integrated(
