@@ -39,9 +39,10 @@ def test_metal_accumulator_bisect() -> None:
         n_energy_bins=4,
     )
     mc = surrogate_to_multi_voltage_mc(direct, 20.0)
-    kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
-    for mrb in (1, 2, 3, 4):
-        result, meta = run_smith_iterative_voltage_integrated(
+    for iteration in range(5):
+        kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
+        try:
+            result, meta = run_smith_iterative_voltage_integrated(
             cell=cell,
             mc=mc,
             halfw=10,
@@ -51,26 +52,23 @@ def test_metal_accumulator_bisect() -> None:
             bethe_c_weak=40.0,
             bethe_c_cutoff=200.0,
             dbdiff_sg_cutoff=1.0,
-            kernels=kernels,
-            marginal_coverage=1.0,
-            max_bins_run=mrb,
-        )
+                kernels=kernels,
+                marginal_coverage=1.0,
+                max_bins_run=3,
+            )
+        finally:
+            kernels.destroy()
         integ = np.asarray(result.integrated, dtype=np.float64)
         bins = [np.asarray(b, dtype=np.float64) for b in result.bin_patterns]
         host = np.zeros_like(integ)
         for b, w in zip(bins, result.bin_weights, strict=False):
             host += float(w) * np.asarray(b, dtype=np.float64).reshape(-1)
+        match = bool(np.allclose(integ, host, rtol=1e-4, atol=1e-3))
         print(
-            f"\n[debug] max_bins_run={mrb}: n_bins_run={result.n_bins_run} "
-            f"voltages={result.bin_voltages_kv} weights={result.bin_weights}\n"
-            f"[debug]   bin sums={[float(np.sum(b)) for b in bins]}\n"
-            f"[debug]   gpu integrated: sum={float(integ.sum()):.6e} "
-            f"nonzero={int(np.count_nonzero(integ))}/{integ.size}\n"
-            f"[debug]   host recombined: sum={float(host.sum()):.6e} "
-            f"nonzero={int(np.count_nonzero(host))}/{host.size}\n"
-            f"[debug]   meta: mode={meta.get('smith_iterative_mode')} "
-            f"fail_k={meta.get('fail_k')} k_solved={meta.get('k_solved')} "
-            f"stopped={result.stopped_by_relative_change} "
-            f"last_rel={result.last_relative_change}",
+            f"[debug] iter={iteration}: n_bins_run={result.n_bins_run} "
+            f"mode={meta.get('smith_iterative_mode')} "
+            f"bin_sums={[float(np.sum(b)) for b in bins]}\n"
+            f"[debug]   gpu_sum={float(integ.sum()):.6e} host_sum={float(host.sum()):.6e} "
+            f"MATCH={match} fail_k={meta.get('fail_k')}",
             flush=True,
         )
