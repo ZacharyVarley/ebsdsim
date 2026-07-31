@@ -48,10 +48,9 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run GPU tests
-        # TEMPORARY: narrowed to the Metal stage-bisect probe.
         run: |
           set -o pipefail
-          pytest tests/gpu/test_debug_metal_stage.py -v -s --timeout=600 --timeout-method=thread 2>&1 | tee pytest-out.txt
+          pytest -m gpu -q --timeout=900 --timeout-method=thread 2>&1 | tee pytest-out.txt
 
       - name: Surface failures as annotations
         if: failure()
