@@ -237,8 +237,10 @@ def run_bins_dynamical(
     uses_implicit_bicg = "hkl_hash" in code_smith_iterative and "bicgstab_solve" in code_smith_iterative
     # Clamp tile: auto_tile_k ignores n_k; global uniq_vals/meta are O(chunk*16k).
     chunk = min(int(chunk), int(n_k), MAX_WG_PER_DIM)
+    # vec2<f16> = 4 B/entry; vec2<f32> storage variant = 8 B/entry.
+    _uv_stride = 8 if "uniq_vals: array<vec2<f32>>" in code_smith_iterative else 4
     if uses_uniq_vals or uses_uniq_meta:
-        max_chunk_uniq = 1_800_000_000 // (16384 * 4)
+        max_chunk_uniq = 1_800_000_000 // (16384 * _uv_stride)
         if chunk > max_chunk_uniq:
             chunk = int(max_chunk_uniq)
 
@@ -262,8 +264,6 @@ def run_bins_dynamical(
             copy_dst=True,
         )
     if uses_uniq_vals:
-        # vec2<f16> = 4 B/entry; vec2<f32> storage variant = 8 B/entry.
-        _uv_stride = 8 if "uniq_vals: array<vec2<f32>>" in code_smith_iterative else 4
         smith_iterative_uniq_vals = StorageBuffer(
             device,
             queue,

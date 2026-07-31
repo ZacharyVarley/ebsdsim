@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ~48 KiB budget, so devices with smaller workgroup storage slide down the
   pack ladder instead of failing pipeline creation. Buckets on 48 KiB
   devices (D3D12-class) are unchanged.
+- macOS/Metal: the unique-segment tile path stored compacted deltas in an
+  f16 storage buffer; Metal miscompiles f16 storage writes (values read
+  back as zeros), producing silently all-zero master patterns for
+  plen-heavy cells. The compacted-value buffer is now f32 (f16 remains
+  workgroup-only, where it is correct on all tested backends).
 
 ## [0.2.1] - 2026-07-30
 

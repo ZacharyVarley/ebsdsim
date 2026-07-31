@@ -69,7 +69,9 @@ struct Params {
 // One-time build scratch only: batch_count * MAX_UWORDS atomic words.
 @group(0) @binding(9) var<storage, read_write> uniq_bits: array<atomic<u32>>;
 // batch * MAX_NU_CAP compacted U(Δ) for unique-segment TILE.
-@group(0) @binding(10) var<storage, read_write> uniq_vals: array<vec2<f16>>;
+// f32 storage: Metal miscompiles f16 storage-buffer writes (reads back as
+// zeros -> all-zero patterns in unique-seg mode); f16 stays in workgroup only.
+@group(0) @binding(10) var<storage, read_write> uniq_vals: array<vec2<f32>>;
 // Per batch: [0..MAX_UWORDS) plain bitwords, [MAX_UWORDS..2*MAX_UWORDS) prefixes.
 @group(0) @binding(11) var<storage, read_write> uniq_meta: array<u32>;
 
@@ -639,9 +641,9 @@ fn main(
                             pref.x * u.x - pref.y * u.y,
                             pref.x * u.y + pref.y * u.x
                         );
-                        uniq_vals[vbase + rank] = vec2<f16>(f16(v.x), f16(v.y));
+                        uniq_vals[vbase + rank] = v;
                     } else {
-                        uniq_vals[vbase + rank] = vec2<f16>(0.0h, 0.0h);
+                        uniq_vals[vbase + rank] = vec2<f32>(0.0, 0.0);
                     }
                 }
                 workgroupBarrier();
@@ -783,7 +785,8 @@ fn main(
                     if (seglen > (g_nu - seg0)) { seglen = g_nu - seg0; }
                     if (USE_GLOBAL_UNIQ_VALS != 0u) {
                         for (var i = lid; i < seglen; i = i + WG) {
-                            spack[i] = uniq_vals[vbase + seg0 + i];
+                            let uv = uniq_vals[vbase + seg0 + i];
+                            spack[i] = vec2<f16>(f16(uv.x), f16(uv.y));
                         }
                     } else {
                         for (var gi = lid; gi < plen; gi = gi + WG) {
@@ -983,7 +986,8 @@ fn main(
                     if (seglen > (g_nu - seg0)) { seglen = g_nu - seg0; }
                     if (USE_GLOBAL_UNIQ_VALS != 0u) {
                         for (var i = lid; i < seglen; i = i + WG) {
-                            spack[i] = uniq_vals[vbase + seg0 + i];
+                            let uv = uniq_vals[vbase + seg0 + i];
+                            spack[i] = vec2<f16>(f16(uv.x), f16(uv.y));
                         }
                     } else {
                         for (var gi = lid; gi < plen; gi = gi + WG) {
