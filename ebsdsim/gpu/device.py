@@ -44,6 +44,53 @@ def _patch_darwin_poller(device: Any) -> None:
     poller._poll_func = pumped_poll
 
 
+def _patch_wgpu_0320_work_done() -> None:
+    """Fix wgpu-py 0.32.0's queue work-done callback signature.
+
+    0.32.0 bundles wgpu-native v29, whose headers added a ``WGPUStringView``
+    parameter to ``WGPUQueueWorkDoneCallback``; the Python codegen missed that
+    one site, so every ``queue.on_submitted_work_done_sync()`` crashes with a
+    CFFI TypeError on all platforms. Re-register the async entry point with
+    the corrected 4-argument callback. No-op on any other wgpu-py version.
+    """
+    if wgpu.__version__ != "0.32.0":
+        return
+    from wgpu.backends.wgpu_native._api import (  # noqa: PLC0415
+        GPUQueue,
+        GPUPromise,
+        ffi,
+        lib,
+        libf,
+        new_struct,
+    )
+
+    def on_submitted_work_done_async(self):
+        @ffi.callback("void(WGPUQueueWorkDoneStatus, WGPUStringView, void *, void *)")
+        def work_done_callback(status, _message, _userdata1, _userdata2):
+            token.set_done()
+            if status == lib.WGPUQueueWorkDoneStatus_Success:
+                promise._wgpu_set_input(True)
+            else:
+                result = {
+                    lib.WGPUQueueWorkDoneStatus_InstanceDropped: "InstanceDropped",
+                    lib.WGPUQueueWorkDoneStatus_Error: "Error",
+                    lib.WGPUQueueWorkDoneStatus_Unknown: "Unknown",
+                }.get(status, "Other")
+                promise._wgpu_set_error(RuntimeError(f"Queue work done status: {result}"))
+
+        work_done_callback_info = new_struct(
+            "WGPUQueueWorkDoneCallbackInfo",
+            mode=lib.WGPUCallbackMode_AllowProcessEvents,
+            callback=work_done_callback,
+        )
+        promise = GPUPromise("on_submitted_work_done", lambda _value: None, keepalive=work_done_callback)
+        token = self._device._poller.get_token()
+        libf.wgpuQueueOnSubmittedWorkDone(self._internal, work_done_callback_info)
+        return promise
+
+    GPUQueue.on_submitted_work_done_async = on_submitted_work_done_async
+
+
 _context: GpuContext | None = None
 _context_features: frozenset[str] | None = None
 
@@ -80,6 +127,7 @@ def get_device(
         device = adapter.request_device_sync(required_features=list(want))
     else:
         device = adapter.request_device_sync()
+    _patch_wgpu_0320_work_done()
     _patch_darwin_poller(device)
     _context = GpuContext(adapter=adapter, device=device, queue=device.queue)
     _context_features = want

@@ -38,7 +38,7 @@ dependencies = [
   "numpy>=1.21",
   # 0.32.0 is a broken upstream release: its wgpu-native v27 callback codegen
   # makes queue.on_submitted_work_done_sync() raise TypeError on all platforms.
-  "wgpu>=0.29,!=0.32.0",
+    "wgpu>=0.29",
 ]
 
 [project.urls]

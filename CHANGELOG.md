@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back as zeros), producing silently all-zero master patterns for
   plen-heavy cells. The compacted-value buffer is now f32 (f16 remains
   workgroup-only, where it is correct on all tested backends).
+- `wgpu==0.32.0` is supported again: the 0.2.1 exclusion is replaced by a
+  runtime shim that corrects that release's queue work-done CFFI callback
+  signature (its bundled wgpu-native v29 added a `WGPUStringView`
+  parameter the Python codegen missed). The shim activates only on
+  wgpu-py 0.32.0.
 
 ## [0.2.1] - 2026-07-30
 
