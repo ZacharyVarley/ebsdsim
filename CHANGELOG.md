@@ -33,14 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Windows/D3D12 and Linux/Vulkan: `SUBMIT_WORK_BUDGET` is now a nonzero safety
-  bound on all platforms (previously macOS-only). A single GPU command buffer
+  bound on these platforms (previously macOS-only). A single GPU command buffer
   for the smith_iterative pipeline can run tens of thousands of workgroups;
   without an execution-time bound, large-n buckets could produce submits that
   exceed the Windows TDR timeout (default 2 s), triggering a device reset and
-  silent loss of all writes in that submit. The budget (1e11 work-units) caps
-  each submit at ~200–400 ms on a discrete GPU — well inside the TDR window
-  while keeping tiles large enough that VRAM, not the work budget, is the
-  binding constraint in the common case.
+  silent loss of all writes in that submit. The budget (1e11 work-units on
+  D3D12/Vulkan) caps each submit at ~200–400 ms on a discrete GPU — well inside
+  the TDR window while keeping tiles large enough that VRAM, not the work
+  budget, is the binding constraint in the common case. Metal retains its
+  tighter 4e9 budget (proven safe on Apple Silicon in 0.2.1) because its
+  command-buffer timeout is on the order of hundreds of milliseconds, far
+  shorter than the Windows TDR window.
 
 - macOS/Metal: work around the wgpu-hal blocking-poll deadlock
   ([gfx-rs/wgpu#9531](https://github.com/gfx-rs/wgpu/issues/9531)) that made
