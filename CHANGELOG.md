@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-05
+
+### Changed
+
+- smith_iterative WGSL kernel (`smith_iterative_build_uniq_shared_bicgstab_f16`):
+  the per-k preamble (centroid, covariance, AABB geometry build; odd-even sort;
+  bitset prefix scan) now runs across all 256 workgroup lanes instead of
+  serially on lane 0. The O(n) odd-even sort is replaced by an O(log²n) bitonic
+  network (with a fallback for n > MAX_N/2). The bitset word load is parallelised,
+  removing O(nwords) global atomic reads from the serial prefix-scan path. The
+  3×3 LLL lattice reduction stays serial on lane 0 (O(1) work).
+- smith_iterative WGSL kernel: `reduce_sum_f` / `reduce_sum_c` now return via
+  `workgroupUniformLoad` instead of a raw shared-memory read, satisfying the
+  WGSL uniformity analysis and avoiding potential data races on the reduction
+  result.
+- smith_iterative WGSL kernel: the BiCGSTAB matvec inner loop no longer branches
+  on `if (j == i) continue`; the self-interaction term is subtracted once after
+  the loop, removing a divergent branch from the hot path.
+- smith_iterative WGSL kernel: the `my_i` private array is now populated with
+  static loop indices and a compile-time bound (`BPT`) instead of a dynamically
+  indexed compact list, preventing the WGSL compiler from spilling the array to
+  scratch (private) memory.
+
 ### Fixed
+
+- Windows/D3D12 and Linux/Vulkan: `SUBMIT_WORK_BUDGET` is now a nonzero safety
+  bound on all platforms (previously macOS-only). A single GPU command buffer
+  for the smith_iterative pipeline can run tens of thousands of workgroups;
+  without an execution-time bound, large-n buckets could produce submits that
+  exceed the Windows TDR timeout (default 2 s), triggering a device reset and
+  silent loss of all writes in that submit. The budget (1e11 work-units) caps
+  each submit at ~200–400 ms on a discrete GPU — well inside the TDR window
+  while keeping tiles large enough that VRAM, not the work budget, is the
+  binding constraint in the common case.
 
 - macOS/Metal: work around the wgpu-hal blocking-poll deadlock
   ([gfx-rs/wgpu#9531](https://github.com/gfx-rs/wgpu/issues/9531)) that made

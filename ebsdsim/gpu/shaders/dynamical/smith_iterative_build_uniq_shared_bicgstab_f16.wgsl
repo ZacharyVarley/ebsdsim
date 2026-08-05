@@ -19,18 +19,18 @@ const BPT: u32 = 2u;
 // Dense/unique-seg bitset may cover up to this AABB length (global meta).
 const MAX_PLEN_CAP: u32 = 65536u;
 const MAX_UWORDS: u32 = 2048u; // ceil(MAX_PLEN_CAP / 32)
-// Resident unique-Δ still packs bitset+prefix into shared spack tail; that
+// Resident unique-Î” still packs bitset+prefix into shared spack tail; that
 // layout only fits ~20k plen words (625 u32) alongside MAX_UNIQ values.
 const MAX_PLEN_SHARED_META: u32 = 20000u;
 const MAX_UWORDS_SHARED: u32 = 625u;
 const META_BITS_BASE: u32 = MAX_UNIQ;
-// Two u32 words → six exact f16 chunks → three vec2<f16> slots (shared meta).
+// Two u32 words â†’ six exact f16 chunks â†’ three vec2<f16> slots (shared meta).
 const META_BITS_SLOTS: u32 = 939u;
 const META_PREFIX_BASE: u32 = META_BITS_BASE + META_BITS_SLOTS;
 // Unique-segment TILE window. With global bitset/prefix, SEG may be MAX_PACK
 // (entire shared spack is values). Host usually sets this to the bucket MAX_PACK.
 const UNIQUE_SEG_TILE: u32 = 8600u;
-// Set to 1u via host replace to force segment TILE even when ν fits.
+// Set to 1u via host replace to force segment TILE even when Î½ fits.
 const FORCE_UNIQUE_SEG_TILE: u32 = 0u;
 // Global compacted unique values (one-time fill; segment loads are coherent).
 const MAX_NU_CAP: u32 = 16384u;
@@ -68,7 +68,7 @@ struct Params {
 @group(0) @binding(8) var<storage, read_write> stats: array<u32>;
 // One-time build scratch only: batch_count * MAX_UWORDS atomic words.
 @group(0) @binding(9) var<storage, read_write> uniq_bits: array<atomic<u32>>;
-// batch * MAX_NU_CAP compacted U(Δ) for unique-segment TILE.
+// batch * MAX_NU_CAP compacted U(Î”) for unique-segment TILE.
 // f32 storage: Metal miscompiles f16 storage-buffer writes (reads back as
 // zeros -> all-zero patterns in unique-seg mode); f16 stays in workgroup only.
 @group(0) @binding(10) var<storage, read_write> uniq_vals: array<vec2<f32>>;
@@ -112,7 +112,7 @@ fn reduce_sum_f(lid: u32, val: f32) -> f32 {
         if (stride <= 1u) { break; }
         stride = stride / 2u;
     }
-    return red_re[0];
+    return workgroupUniformLoad(&red_re[0]);
 }
 
 fn reduce_sum_c(lid: u32, val: vec2<f32>) -> vec2<f32> {
@@ -130,7 +130,36 @@ fn reduce_sum_c(lid: u32, val: vec2<f32>) -> vec2<f32> {
         if (stride <= 1u) { break; }
         stride = stride / 2u;
     }
-    return vec2<f32>(red_re[0], red_im[0]);
+    return vec2<f32>(workgroupUniformLoad(&red_re[0]),
+                     workgroupUniformLoad(&red_im[0]));
+}
+
+fn reduce_min_f(lid: u32, val: f32) -> f32 {
+    workgroupBarrier();
+    red_re[lid] = val;
+    workgroupBarrier();
+    var stride = WG / 2u;
+    loop {
+        if (lid < stride) { red_re[lid] = min(red_re[lid], red_re[lid + stride]); }
+        workgroupBarrier();
+        if (stride <= 1u) { break; }
+        stride = stride / 2u;
+    }
+    return workgroupUniformLoad(&red_re[0]);
+}
+
+fn reduce_max_f(lid: u32, val: f32) -> f32 {
+    workgroupBarrier();
+    red_re[lid] = val;
+    workgroupBarrier();
+    var stride = WG / 2u;
+    loop {
+        if (lid < stride) { red_re[lid] = max(red_re[lid], red_re[lid + stride]); }
+        workgroupBarrier();
+        if (stride <= 1u) { break; }
+        stride = stride / 2u;
+    }
+    return workgroupUniformLoad(&red_re[0]);
 }
 
 fn load_u(idx: u32) -> vec2<f32> {
@@ -214,7 +243,7 @@ fn inv3(
     let c21 = a01 * a20 - a00 * a21;
     let c22 = a00 * a11 - a01 * a10;
     // Preserve sign: max(det, eps) breaks orientation-reversing LLL bases (det < 0)
-    // and blows up Minv → empty pack → diagonal-only BiCGSTAB (iters = rank).
+    // and blows up Minv â†’ empty pack â†’ diagonal-only BiCGSTAB (iters = rank).
     let det = a00 * c00 + a01 * c10 + a02 * c20;
     let inv_d = 1.0 / (sign(det) * max(abs(det), 1.0e-20));
     return array<f32, 9>(
@@ -235,71 +264,106 @@ fn beam_hkl(n_base: u32, i: u32) -> vec3<f32> {
     );
 }
 
-fn build_smith_iterative_geometry(n: u32, n_base: u32) {
-    var mx = 0.0; var my = 0.0; var mz = 0.0;
-    for (var i = 0u; i < n; i = i + 1u) {
-        let h = beam_hkl(n_base, i);
-        mx = mx + h.x; my = my + h.y; mz = mz + h.z;
-    }
+fn build_smith_iterative_geometry(n: u32, n_base: u32, lid: u32) {
+    // ===== Phase 1 (ALL THREADS): parallel reductions for centroid + covariance =====
     let inv_n = 1.0 / f32(n);
-    mx = mx * inv_n; my = my * inv_n; mz = mz * inv_n;
+    var mx_loc = 0.0; var my_loc = 0.0; var mz_loc = 0.0;
+    for (var i = lid; i < n; i = i + WG) {
+        let h = beam_hkl(n_base, i);
+        mx_loc = mx_loc + h.x; my_loc = my_loc + h.y; mz_loc = mz_loc + h.z;
+    }
+    let mx = reduce_sum_f(lid, mx_loc) * inv_n;
+    let my = reduce_sum_f(lid, my_loc) * inv_n;
+    let mz = reduce_sum_f(lid, mz_loc) * inv_n;
 
-    var c00 = 0.0; var c01 = 0.0; var c02 = 0.0;
-    var c11 = 0.0; var c12 = 0.0; var c22 = 0.0;
-    for (var i = 0u; i < n; i = i + 1u) {
+    var c00_loc = 0.0; var c01_loc = 0.0; var c02_loc = 0.0;
+    var c11_loc = 0.0; var c12_loc = 0.0; var c22_loc = 0.0;
+    for (var i = lid; i < n; i = i + WG) {
         let h = beam_hkl(n_base, i);
         let dx = h.x - mx; let dy = h.y - my; let dz = h.z - mz;
-        c00 = c00 + dx * dx; c01 = c01 + dx * dy; c02 = c02 + dx * dz;
-        c11 = c11 + dy * dy; c12 = c12 + dy * dz; c22 = c22 + dz * dz;
+        c00_loc = c00_loc + dx * dx; c01_loc = c01_loc + dx * dy; c02_loc = c02_loc + dx * dz;
+        c11_loc = c11_loc + dy * dy; c12_loc = c12_loc + dy * dz; c22_loc = c22_loc + dz * dz;
     }
-    c00 = c00 * inv_n + 1.0e-9;
-    c01 = c01 * inv_n; c02 = c02 * inv_n;
-    c11 = c11 * inv_n + 1.0e-9; c12 = c12 * inv_n;
-    c22 = c22 * inv_n + 1.0e-9;
+    let c00 = reduce_sum_f(lid, c00_loc) * inv_n + 1.0e-9;
+    let c01 = reduce_sum_f(lid, c01_loc) * inv_n;
+    let c02 = reduce_sum_f(lid, c02_loc) * inv_n;
+    let c11 = reduce_sum_f(lid, c11_loc) * inv_n + 1.0e-9;
+    let c12 = reduce_sum_f(lid, c12_loc) * inv_n;
+    let c22 = reduce_sum_f(lid, c22_loc) * inv_n + 1.0e-9;
 
-    let bli = inv3(
-        params.bl00, params.bl01, params.bl02,
-        params.bl10, params.bl11, params.bl12,
-        params.bl20, params.bl21, params.bl22,
-    );
-    let b00 = bli[0]; let b01 = bli[3]; let b02 = bli[6];
-    let b10 = bli[1]; let b11 = bli[4]; let b12 = bli[7];
-    let b20 = bli[2]; let b21 = bli[5]; let b22 = bli[8];
+    // ===== Phase 2 (LANE 0): O(1) matrix products, LLL reduction, inverse =====
+    if (lid == 0u) {
+        let bli = inv3(
+            params.bl00, params.bl01, params.bl02,
+            params.bl10, params.bl11, params.bl12,
+            params.bl20, params.bl21, params.bl22,
+        );
+        let b00 = bli[0]; let b01 = bli[3]; let b02 = bli[6];
+        let b10 = bli[1]; let b11 = bli[4]; let b12 = bli[7];
+        let b20 = bli[2]; let b21 = bli[5]; let b22 = bli[8];
 
-    let t00 = c00*b00 + c01*b01 + c02*b02;
-    let t01 = c00*b10 + c01*b11 + c02*b12;
-    let t02 = c00*b20 + c01*b21 + c02*b22;
-    let t10 = c01*b00 + c11*b01 + c12*b02;
-    let t11 = c01*b10 + c11*b11 + c12*b12;
-    let t12 = c01*b20 + c11*b21 + c12*b22;
-    let t20 = c02*b00 + c12*b01 + c22*b02;
-    let t21 = c02*b10 + c12*b11 + c22*b12;
-    let t22 = c02*b20 + c12*b21 + c22*b22;
+        let t00 = c00*b00 + c01*b01 + c02*b02;
+        let t01 = c00*b10 + c01*b11 + c02*b12;
+        let t02 = c00*b20 + c01*b21 + c02*b22;
+        let t10 = c01*b00 + c11*b01 + c12*b02;
+        let t11 = c01*b10 + c11*b11 + c12*b12;
+        let t12 = c01*b20 + c11*b21 + c12*b22;
+        let t20 = c02*b00 + c12*b01 + c22*b02;
+        let t21 = c02*b10 + c12*b11 + c22*b12;
+        let t22 = c02*b20 + c12*b21 + c22*b22;
 
-    let g00 = b00*t00 + b01*t10 + b02*t20;
-    let g01 = b00*t01 + b01*t11 + b02*t21;
-    let g02 = b00*t02 + b01*t12 + b02*t22;
-    let g10 = b10*t00 + b11*t10 + b12*t20;
-    let g11 = b10*t01 + b11*t11 + b12*t21;
-    let g12 = b10*t02 + b11*t12 + b12*t22;
-    let g20 = b20*t00 + b21*t10 + b22*t20;
-    let g21 = b20*t01 + b21*t11 + b22*t21;
-    let g22 = b20*t02 + b21*t12 + b22*t22;
+        let g00 = b00*t00 + b01*t10 + b02*t20;
+        let g01 = b00*t01 + b01*t11 + b02*t21;
+        let g02 = b00*t02 + b01*t12 + b02*t22;
+        let g10 = b10*t00 + b11*t10 + b12*t20;
+        let g11 = b10*t01 + b11*t11 + b12*t21;
+        let g12 = b10*t02 + b11*t12 + b12*t22;
+        let g20 = b20*t00 + b21*t10 + b22*t20;
+        let g21 = b20*t01 + b21*t11 + b22*t21;
+        let g22 = b20*t02 + b21*t12 + b22*t22;
 
-    var u00 = 1.0; var u01 = 0.0; var u02 = 0.0;
-    var u10 = 0.0; var u11 = 1.0; var u12 = 0.0;
-    var u20 = 0.0; var u21 = 0.0; var u22 = 1.0;
-    let delta = 0.99;
-    var k = 1;
-    var it = 0;
-    loop {
-        if (k >= 3 || it >= 200) { break; }
-        it = it + 1;
-
-        // Size-reduce row k against j = k-1 .. 0 (recompute GSO mu each time)
-        var j = k - 1;
+        var u00 = 1.0; var u01 = 0.0; var u02 = 0.0;
+        var u10 = 0.0; var u11 = 1.0; var u12 = 0.0;
+        var u20 = 0.0; var u21 = 0.0; var u22 = 1.0;
+        let delta = 0.99;
+        var k = 1;
+        var it = 0;
         loop {
-            // GSO: Bs rows
+            if (k >= 3 || it >= 200) { break; }
+            it = it + 1;
+
+            // Size-reduce row k against j = k-1 .. 0 (recompute GSO mu each time)
+            var j = k - 1;
+            loop {
+                // GSO: Bs rows
+                var bs00 = u00; var bs01 = u01; var bs02 = u02;
+                var bs10 = u10; var bs11 = u11; var bs12 = u12;
+                var bs20 = u20; var bs21 = u21; var bs22 = u22;
+                let ip0 = bs00*(g00*bs00+g01*bs01+g02*bs02) + bs01*(g10*bs00+g11*bs01+g12*bs02) + bs02*(g20*bs00+g21*bs01+g22*bs02);
+                let mu10 = (u10*(g00*bs00+g01*bs01+g02*bs02) + u11*(g10*bs00+g11*bs01+g12*bs02) + u12*(g20*bs00+g21*bs01+g22*bs02)) / max(ip0, 1.0e-30);
+                bs10 = bs10 - mu10 * bs00; bs11 = bs11 - mu10 * bs01; bs12 = bs12 - mu10 * bs02;
+                let ip1 = bs10*(g00*bs10+g01*bs11+g02*bs12) + bs11*(g10*bs10+g11*bs11+g12*bs12) + bs12*(g20*bs10+g21*bs11+g22*bs12);
+                let mu20 = (u20*(g00*bs00+g01*bs01+g02*bs02) + u21*(g10*bs00+g11*bs01+g12*bs02) + u22*(g20*bs00+g21*bs01+g22*bs02)) / max(ip0, 1.0e-30);
+                let mu21 = (u20*(g00*bs10+g01*bs11+g02*bs12) + u21*(g10*bs10+g11*bs11+g12*bs12) + u22*(g20*bs10+g21*bs11+g22*bs12)) / max(ip1, 1.0e-30);
+                var mu: f32;
+                if (k == 1) { mu = mu10; }
+                else if (j == 0) { mu = mu20; }
+                else { mu = mu21; }
+                let q = round(mu);
+                if (abs(q) > 0.0) {
+                    if (k == 1) {
+                        u10 = u10 - q * u00; u11 = u11 - q * u01; u12 = u12 - q * u02;
+                    } else if (j == 0) {
+                        u20 = u20 - q * u00; u21 = u21 - q * u01; u22 = u22 - q * u02;
+                    } else {
+                        u20 = u20 - q * u10; u21 = u21 - q * u11; u22 = u22 - q * u12;
+                    }
+                }
+                if (j == 0) { break; }
+                j = j - 1;
+            }
+
+            // Lovasz on GSO lengths
             var bs00 = u00; var bs01 = u01; var bs02 = u02;
             var bs10 = u10; var bs11 = u11; var bs12 = u12;
             var bs20 = u20; var bs21 = u21; var bs22 = u22;
@@ -309,88 +373,73 @@ fn build_smith_iterative_geometry(n: u32, n_base: u32) {
             let ip1 = bs10*(g00*bs10+g01*bs11+g02*bs12) + bs11*(g10*bs10+g11*bs11+g12*bs12) + bs12*(g20*bs10+g21*bs11+g22*bs12);
             let mu20 = (u20*(g00*bs00+g01*bs01+g02*bs02) + u21*(g10*bs00+g11*bs01+g12*bs02) + u22*(g20*bs00+g21*bs01+g22*bs02)) / max(ip0, 1.0e-30);
             let mu21 = (u20*(g00*bs10+g01*bs11+g02*bs12) + u21*(g10*bs10+g11*bs11+g12*bs12) + u22*(g20*bs10+g21*bs11+g22*bs12)) / max(ip1, 1.0e-30);
-            var mu: f32;
-            if (k == 1) { mu = mu10; }
-            else if (j == 0) { mu = mu20; }
-            else { mu = mu21; }
-            let q = round(mu);
-            if (abs(q) > 0.0) {
-                if (k == 1) {
-                    u10 = u10 - q * u00; u11 = u11 - q * u01; u12 = u12 - q * u02;
-                } else if (j == 0) {
-                    u20 = u20 - q * u00; u21 = u21 - q * u01; u22 = u22 - q * u02;
-                } else {
-                    u20 = u20 - q * u10; u21 = u21 - q * u11; u22 = u22 - q * u12;
-                }
-            }
-            if (j == 0) { break; }
-            j = j - 1;
-        }
+            bs20 = bs20 - mu20 * bs00 - mu21 * bs10;
+            bs21 = bs21 - mu20 * bs01 - mu21 * bs11;
+            bs22 = bs22 - mu20 * bs02 - mu21 * bs12;
+            let ip2 = bs20*(g00*bs20+g01*bs21+g02*bs22) + bs21*(g10*bs20+g11*bs21+g12*bs22) + bs22*(g20*bs20+g21*bs21+g22*bs22);
 
-        // Lovasz on GSO lengths
-        var bs00 = u00; var bs01 = u01; var bs02 = u02;
-        var bs10 = u10; var bs11 = u11; var bs12 = u12;
-        var bs20 = u20; var bs21 = u21; var bs22 = u22;
-        let ip0 = bs00*(g00*bs00+g01*bs01+g02*bs02) + bs01*(g10*bs00+g11*bs01+g12*bs02) + bs02*(g20*bs00+g21*bs01+g22*bs02);
-        let mu10 = (u10*(g00*bs00+g01*bs01+g02*bs02) + u11*(g10*bs00+g11*bs01+g12*bs02) + u12*(g20*bs00+g21*bs01+g22*bs02)) / max(ip0, 1.0e-30);
-        bs10 = bs10 - mu10 * bs00; bs11 = bs11 - mu10 * bs01; bs12 = bs12 - mu10 * bs02;
-        let ip1 = bs10*(g00*bs10+g01*bs11+g02*bs12) + bs11*(g10*bs10+g11*bs11+g12*bs12) + bs12*(g20*bs10+g21*bs11+g22*bs12);
-        let mu20 = (u20*(g00*bs00+g01*bs01+g02*bs02) + u21*(g10*bs00+g11*bs01+g12*bs02) + u22*(g20*bs00+g21*bs01+g22*bs02)) / max(ip0, 1.0e-30);
-        let mu21 = (u20*(g00*bs10+g01*bs11+g02*bs12) + u21*(g10*bs10+g11*bs11+g12*bs12) + u22*(g20*bs10+g21*bs11+g22*bs12)) / max(ip1, 1.0e-30);
-        bs20 = bs20 - mu20 * bs00 - mu21 * bs10;
-        bs21 = bs21 - mu20 * bs01 - mu21 * bs11;
-        bs22 = bs22 - mu20 * bs02 - mu21 * bs12;
-        let ip2 = bs20*(g00*bs20+g01*bs21+g02*bs22) + bs21*(g10*bs20+g11*bs21+g12*bs22) + bs22*(g20*bs20+g21*bs21+g22*bs22);
-
-        var lovasz_ok: bool;
-        if (k == 1) {
-            lovasz_ok = ip1 >= (delta - mu10 * mu10) * ip0;
-        } else {
-            lovasz_ok = ip2 >= (delta - mu21 * mu21) * ip1;
-        }
-        if (lovasz_ok) {
-            k = k + 1;
-        } else {
+            var lovasz_ok: bool;
             if (k == 1) {
-                let z0 = u00; let z1 = u01; let z2 = u02;
-                u00 = u10; u01 = u11; u02 = u12;
-                u10 = z0; u11 = z1; u12 = z2;
+                lovasz_ok = ip1 >= (delta - mu10 * mu10) * ip0;
             } else {
-                let z0 = u10; let z1 = u11; let z2 = u12;
-                u10 = u20; u11 = u21; u12 = u22;
-                u20 = z0; u21 = z1; u22 = z2;
+                lovasz_ok = ip2 >= (delta - mu21 * mu21) * ip1;
             }
-            k = max(k - 1, 1);
+            if (lovasz_ok) {
+                k = k + 1;
+            } else {
+                if (k == 1) {
+                    let z0 = u00; let z1 = u01; let z2 = u02;
+                    u00 = u10; u01 = u11; u02 = u12;
+                    u10 = z0; u11 = z1; u12 = z2;
+                } else {
+                    let z0 = u10; let z1 = u11; let z2 = u12;
+                    u10 = u20; u11 = u21; u12 = u22;
+                    u20 = z0; u21 = z1; u22 = z2;
+                }
+                k = max(k - 1, 1);
+            }
         }
+
+        let m00 = u00*b00 + u01*b10 + u02*b20;
+        let m01 = u00*b01 + u01*b11 + u02*b21;
+        let m02 = u00*b02 + u01*b12 + u02*b22;
+        let m10 = u10*b00 + u11*b10 + u12*b20;
+        let m11 = u10*b01 + u11*b11 + u12*b21;
+        let m12 = u10*b02 + u11*b12 + u12*b22;
+        let m20 = u20*b00 + u21*b10 + u22*b20;
+        let m21 = u20*b01 + u21*b11 + u22*b21;
+        let m22 = u20*b02 + u21*b12 + u22*b22;
+        geom[0] = m00; geom[1] = m01; geom[2] = m02;
+        geom[3] = m10; geom[4] = m11; geom[5] = m12;
+        geom[6] = m20; geom[7] = m21; geom[8] = m22;
+        let mi = inv3(m00, m01, m02, m10, m11, m12, m20, m21, m22);
+        for (var t = 0u; t < 9u; t = t + 1u) { geom[9u + t] = mi[t]; }
     }
+    workgroupBarrier();
 
-    let m00 = u00*b00 + u01*b10 + u02*b20;
-    let m01 = u00*b01 + u01*b11 + u02*b21;
-    let m02 = u00*b02 + u01*b12 + u02*b22;
-    let m10 = u10*b00 + u11*b10 + u12*b20;
-    let m11 = u10*b01 + u11*b11 + u12*b21;
-    let m12 = u10*b02 + u11*b12 + u12*b22;
-    let m20 = u20*b00 + u21*b10 + u22*b20;
-    let m21 = u20*b01 + u21*b11 + u22*b21;
-    let m22 = u20*b02 + u21*b12 + u22*b22;
-    geom[0] = m00; geom[1] = m01; geom[2] = m02;
-    geom[3] = m10; geom[4] = m11; geom[5] = m12;
-    geom[6] = m20; geom[7] = m21; geom[8] = m22;
-    let mi = inv3(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-    for (var t = 0u; t < 9u; t = t + 1u) { geom[9u + t] = mi[t]; }
-
+    // ===== Phase 3 (ALL THREADS): parallel reduction for AABB =====
     let h0 = beam_hkl(n_base, 0u);
-    var lo0 = 1e9; var lo1 = 1e9; var lo2 = 1e9;
-    var hi0 = -1e9; var hi1 = -1e9; var hi2 = -1e9;
-    for (var i = 0u; i < n; i = i + 1u) {
+    let m00 = geom[0]; let m01 = geom[1]; let m02 = geom[2];
+    let m10 = geom[3]; let m11 = geom[4]; let m12 = geom[5];
+    let m20 = geom[6]; let m21 = geom[7]; let m22 = geom[8];
+    var lo0_loc = 1e9; var lo1_loc = 1e9; var lo2_loc = 1e9;
+    var hi0_loc = -1e9; var hi1_loc = -1e9; var hi2_loc = -1e9;
+    for (var i = lid; i < n; i = i + WG) {
         let h = beam_hkl(n_base, i);
         let dx = h.x - h0.x; let dy = h.y - h0.y; let dz = h.z - h0.z;
         let c0 = round(m00*dx + m01*dy + m02*dz);
         let c1 = round(m10*dx + m11*dy + m12*dz);
         let c2 = round(m20*dx + m21*dy + m22*dz);
-        lo0 = min(lo0, c0); lo1 = min(lo1, c1); lo2 = min(lo2, c2);
-        hi0 = max(hi0, c0); hi1 = max(hi1, c1); hi2 = max(hi2, c2);
+        lo0_loc = min(lo0_loc, c0); lo1_loc = min(lo1_loc, c1); lo2_loc = min(lo2_loc, c2);
+        hi0_loc = max(hi0_loc, c0); hi1_loc = max(hi1_loc, c1); hi2_loc = max(hi2_loc, c2);
     }
+    let lo0 = reduce_min_f(lid, lo0_loc);
+    let lo1 = reduce_min_f(lid, lo1_loc);
+    let lo2 = reduce_min_f(lid, lo2_loc);
+    let hi0 = reduce_max_f(lid, hi0_loc);
+    let hi1 = reduce_max_f(lid, hi1_loc);
+    let hi2 = reduce_max_f(lid, hi2_loc);
+
     let e0 = hi0 - lo0 + 1.0;
     let e1 = hi1 - lo1 + 1.0;
     let e2 = hi2 - lo2 + 1.0;
@@ -398,6 +447,7 @@ fn build_smith_iterative_geometry(n: u32, n_base: u32) {
     let d1 = 2.0 * e1 - 1.0;
     let d2 = 2.0 * e2 - 1.0;
     let plen_f = d0 * d1 * d2;
+    // Idempotent writes (all threads write the same values).
     geom[18] = lo0; geom[19] = lo1; geom[20] = lo2;
     geom[21] = e0; geom[22] = e1; geom[23] = e2;
     geom[24] = d0; geom[25] = d1; geom[26] = d2;
@@ -440,9 +490,7 @@ fn main(
     }
     workgroupBarrier();
 
-    if (lid == 0u) {
-        build_smith_iterative_geometry(n, n_base);
-    }
+    build_smith_iterative_geometry(n, n_base, lid);
     workgroupBarrier();
 
     if (lid == 0u) {
@@ -480,18 +528,52 @@ fn main(
     }
     workgroupBarrier();
 
-    // Odd-even sort by ss
-    for (var phase = 0u; phase < n; phase = phase + 1u) {
-        let odd = phase & 1u;
-        for (var i = lid; i < n / 2u; i = i + WG) {
-            let a = 2u * i + odd;
-            let b = a + 1u;
-            if (b < n && ss[a] > ss[b]) {
-                let ts = ss[a]; ss[a] = ss[b]; ss[b] = ts;
-                let to = sord[a]; sord[a] = sord[b]; sord[b] = to;
+    // Bitonic sort by ss (O(logÂ²n) barriers instead of O(n))
+    if (n > 1u) {
+        // Find next power of 2 >= n
+        var np = 1u;
+        while (np < n) { np = np * 2u; }
+        if (np > MAX_N) {
+            // Fallback: odd-even sort for n > MAX_N/2 (bitonic would overflow ss[])
+            for (var phase = 0u; phase < n; phase = phase + 1u) {
+                let odd = phase & 1u;
+                for (var i = lid; i < n / 2u; i = i + WG) {
+                    let a = 2u * i + odd;
+                    let b = a + 1u;
+                    if (b < n && ss[a] > ss[b]) {
+                        let ts = ss[a]; ss[a] = ss[b]; ss[b] = ts;
+                        let to = sord[a]; sord[a] = sord[b]; sord[b] = to;
+                    }
+                }
+                workgroupBarrier();
+            }
+        } else {
+            // Pad with max int32 so padding elements sort to the end
+            for (var i = lid; i < np; i = i + WG) {
+                if (i >= n) { ss[i] = 0x7FFFFFFF; sord[i] = 0u; }
+            }
+            workgroupBarrier();
+            // Bitonic sort
+            var k = 2u;
+            while (k <= np) {
+                var j = k / 2u;
+                while (j > 0u) {
+                    for (var i = lid; i < np; i = i + WG) {
+                        let ixj = i ^ j;
+                        if (ixj > i && ixj < np) {
+                            let ascending = (i & k) == 0u;
+                            if ((ascending && ss[i] > ss[ixj]) || (!ascending && ss[i] < ss[ixj])) {
+                                let ts = ss[i]; ss[i] = ss[ixj]; ss[ixj] = ts;
+                                let to = sord[i]; sord[i] = sord[ixj]; sord[ixj] = to;
+                            }
+                        }
+                    }
+                    workgroupBarrier();
+                    j = j / 2u;
+                }
+                k = k * 2u;
             }
         }
-        workgroupBarrier();
     }
 
     let pref = params.pref;
@@ -546,12 +628,16 @@ fn main(
         }
         workgroupBarrier();
 
-        // Serialize bitset → global plain words + exclusive prefixes (once per k).
+        // Parallel: all threads load words from global â†’ global uniq_meta
+        for (var wi = lid; wi < nwords; wi = wi + WG) {
+            uniq_meta[meta_base + wi] = atomicLoad(&uniq_bits[bits_base + wi]);
+        }
+        workgroupBarrier();
+        // Serial prefix sum on lane 0 (shared reads only, no global atomics)
         if (lid == 0u) {
             var nu = 0u;
             for (var wi = 0u; wi < nwords; wi = wi + 1u) {
-                let word = atomicLoad(&uniq_bits[bits_base + wi]);
-                uniq_meta[meta_base + wi] = word;
+                let word = uniq_meta[meta_base + wi];
                 uniq_meta[meta_base + MAX_UWORDS + wi] = nu;
                 nu = nu + countOneBits(word);
             }
@@ -664,10 +750,8 @@ fn main(
     var my_i: array<u32, BPT>;
     for (var t = 0u; t < BPT; t = t + 1u) {
         let idx = lid + t * WG;
-        if (idx < n) {
-            my_i[n_own] = idx;
-            n_own = n_own + 1u;
-        }
+        my_i[t] = idx;                       // static index t, no dynamic store
+        n_own = n_own + select(0u, 1u, idx < n);
     }
 
     var yd: array<vec2<f32>, BPT>;
@@ -683,25 +767,28 @@ fn main(
     var scl: array<vec2<f32>, BPT>;
     var orig: array<u32, BPT>;
 
-    for (var t = 0u; t < n_own; t = t + 1u) {
+    for (var t = 0u; t < BPT; t = t + 1u) {
+        let live = (lid + t * WG) < n;
         let i = my_i[t];
-        let o = sord[i];
-        orig[t] = o;
-        Dd[t] = d_a[n_base + o];
-        let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
-        let rr0 = max(cx_abs2(diag), 1.0e-30);
-        let rad = sqrt(sqrt(rr0));
-        let inv_rad = 1.0 / max(rad, 1.0e-15);
-        let half_ang = 0.5 * atan2(diag.y, diag.x);
-        scl[t] = vec2<f32>(inv_rad * cos(-half_ang), inv_rad * sin(-half_ang));
-        wd[t] = cx_scale(e0[n_base + o], scale);
-        yd[t] = vec2<f32>(0.0, 0.0);
+        if (live) {
+            let o = sord[i];
+            orig[t] = o;
+            Dd[t] = d_a[n_base + o];
+            let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
+            let rr0 = max(cx_abs2(diag), 1.0e-30);
+            let rad = sqrt(sqrt(rr0));
+            let inv_rad = 1.0 / max(rad, 1.0e-15);
+            let half_ang = 0.5 * atan2(diag.y, diag.x);
+            scl[t] = vec2<f32>(inv_rad * cos(-half_ang), inv_rad * sin(-half_ang));
+            wd[t] = cx_scale(e0[n_base + o], scale);
+            yd[t] = vec2<f32>(0.0, 0.0);
+        }
     }
 
     var total_it = 0u;
     var any_fail = 0u;
     for (var col = 0u; col < params.rank; col = col + 1u) {
-        for (var t = 0u; t < n_own; t = t + 1u) {
+        for (var t = 0u; t < BPT; t = t + 1u) {
             yd[t] = vec2<f32>(0.0, 0.0);
             rd[t] = cx_mul(scl[t], wd[t]);
             rhatd[t] = rd[t];
@@ -716,8 +803,9 @@ fn main(
 
         {
             var r0_loc = 0.0;
-            for (var t = 0u; t < n_own; t = t + 1u) {
-                r0_loc = r0_loc + cx_abs2(rd[t]);
+            for (var t = 0u; t < BPT; t = t + 1u) {
+                let live = (lid + t * WG) < n;
+                if (live) { r0_loc = r0_loc + cx_abs2(rd[t]); }
             }
             if (sqrt(reduce_sum_f(lid, r0_loc)) <= params.atol) {
                 it = 0u;
@@ -725,49 +813,57 @@ fn main(
             } else {
                 for (var kk = 1u; kk <= params.max_iter; kk = kk + 1u) {
                     var rho_loc = vec2<f32>(0.0, 0.0);
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        rho_loc = cx_add(rho_loc, cx_mul(cx_conj(rhatd[t]), rd[t]));
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) { rho_loc = cx_add(rho_loc, cx_mul(cx_conj(rhatd[t]), rd[t])); }
                     }
                     let rho = reduce_sum_c(lid, rho_loc);
                     if (cx_abs2(rho) < 1.0e-30) { it = kk; col_ok = 0u; break; }
                     let beta = cx_mul(cx_div(rho, rho_old), cx_div(alpha, omega));
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
                         let pwo = cx_sub(pd[t], cx_mul(omega, vd[t]));
                         pd[t] = cx_add(rd[t], cx_mul(beta, pwo));
-                        sp[my_i[t]] = cx_mul(scl[t], pd[t]);
+                        if (live) { sp[my_i[t]] = cx_mul(scl[t], pd[t]); }
                     }
                     workgroupBarrier();
 
-            for (var t = 0u; t < n_own; t = t + 1u) {
+            for (var t = 0u; t < BPT; t = t + 1u) {
                 Apd[t] = vec2<f32>(0.0, 0.0);
             }
             if (mode == 0u) {
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     var acc = vec2<f32>(0.0, 0.0);
                     let si = ss[i];
                     for (var j = 0u; j < n; j = j + 1u) {
-                        if (j == i) { continue; }
                         let idx = u32(si - ss[j] + off);
                         if (idx < plen) {
                             acc = cx_add(acc, cx_mul(load_u(idx), sp[j]));
                         }
                     }
+                    // j==i implies idx==off; subtract the self-term once.
+                    acc = cx_sub(acc, cx_mul(load_u(u32(off)), sp[i]));
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), acc);
                     Apd[t] = cx_mul(scl[t], qpv);
                 }
             } else if (mode == 1u) {
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     var acc = vec2<f32>(0.0, 0.0);
                     let si = ss[i];
                     for (var j = 0u; j < n; j = j + 1u) {
-                        if (j == i) { continue; }
                         let idx = u32(si - ss[j] + off);
                         acc = cx_add(acc, cx_mul(load_u(unique_rank(idx)), sp[j]));
                     }
+                    // j==i implies idx==off; subtract the self-term once.
+                    acc = cx_sub(acc, cx_mul(load_u(unique_rank(u32(off))), sp[i]));
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), acc);
                     Apd[t] = cx_mul(scl[t], qpv);
@@ -822,24 +918,32 @@ fn main(
                         }
                     }
                     workgroupBarrier();
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (!live) { continue; }
                         let i = my_i[t];
                         var acc = Apd[t];
                         let si = ss[i];
                         for (var j = 0u; j < n; j = j + 1u) {
-                            if (j == i) { continue; }
                             let idx = u32(si - ss[j] + off);
                             let rank = unique_rank_g(batch, idx);
                             if (rank >= seg0 && (rank - seg0) < seglen) {
                                 acc = cx_add(acc, cx_mul(load_u(rank - seg0), sp[j]));
                             }
                         }
+                        // j==i implies idx==off; subtract the self-term once.
+                        let self_rank = unique_rank_g(batch, u32(off));
+                        if (self_rank >= seg0 && (self_rank - seg0) < seglen) {
+                            acc = cx_sub(acc, cx_mul(load_u(self_rank - seg0), sp[i]));
+                        }
                         Apd[t] = acc;
                     }
                     workgroupBarrier();
                     seg0 = seg0 + seglen;
                 }
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), Apd[t]);
@@ -879,23 +983,31 @@ fn main(
                         }
                     }
                     workgroupBarrier();
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (!live) { continue; }
                         let i = my_i[t];
                         var acc = Apd[t];
                         let si = ss[i];
                         for (var j = 0u; j < n; j = j + 1u) {
-                            if (j == i) { continue; }
                             let idx = u32(si - ss[j] + off);
                             if (idx >= tile0 && (idx - tile0) < tlen) {
                                 acc = cx_add(acc, cx_mul(load_u(idx - tile0), sp[j]));
                             }
+                        }
+                        // j==i implies idx==off; subtract the self-term once.
+                        let self_off = u32(off) - tile0;
+                        if (u32(off) >= tile0 && self_off < tlen) {
+                            acc = cx_sub(acc, cx_mul(load_u(self_off), sp[i]));
                         }
                         Apd[t] = acc;
                     }
                     workgroupBarrier();
                     tile0 = tile0 + tlen;
                 }
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), Apd[t]);
@@ -904,30 +1016,32 @@ fn main(
             }
             workgroupBarrier();
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
                         vd[t] = Apd[t];
                     }
 
                     var rhat_v_loc = vec2<f32>(0.0, 0.0);
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        rhat_v_loc = cx_add(rhat_v_loc, cx_mul(cx_conj(rhatd[t]), vd[t]));
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) { rhat_v_loc = cx_add(rhat_v_loc, cx_mul(cx_conj(rhatd[t]), vd[t])); }
                     }
                     let rhat_v = reduce_sum_c(lid, rhat_v_loc);
                     if (cx_abs2(rhat_v) < 1.0e-30) { it = kk; col_ok = 0u; break; }
                     alpha = cx_div(rho, rhat_v);
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
                         yd[t] = cx_add(yd[t], cx_mul(alpha, pd[t]));
                         sres[t] = cx_sub(rd[t], cx_mul(alpha, vd[t]));
                     }
                     var s_loc = 0.0;
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        s_loc = s_loc + cx_abs2(sres[t]);
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) { s_loc = s_loc + cx_abs2(sres[t]); }
                     }
                     let s_n = sqrt(reduce_sum_f(lid, s_loc));
                     it = kk;
                     if (s_n != s_n || s_n > 1.0e20) {
-                        for (var t = 0u; t < n_own; t = t + 1u) {
+                        for (var t = 0u; t < BPT; t = t + 1u) {
                             yd[t] = vec2<f32>(0.0, 0.0);
                         }
                         col_ok = 0u;
@@ -935,40 +1049,47 @@ fn main(
                     }
                     if (s_n <= params.atol) { col_ok = 1u; break; }
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        sp[my_i[t]] = cx_mul(scl[t], sres[t]);
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) { sp[my_i[t]] = cx_mul(scl[t], sres[t]); }
                     }
                     workgroupBarrier();
 
-            for (var t = 0u; t < n_own; t = t + 1u) {
+            for (var t = 0u; t < BPT; t = t + 1u) {
                 Apd[t] = vec2<f32>(0.0, 0.0);
             }
             if (mode == 0u) {
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     var acc = vec2<f32>(0.0, 0.0);
                     let si = ss[i];
                     for (var j = 0u; j < n; j = j + 1u) {
-                        if (j == i) { continue; }
                         let idx = u32(si - ss[j] + off);
                         if (idx < plen) {
                             acc = cx_add(acc, cx_mul(load_u(idx), sp[j]));
                         }
                     }
+                    // j==i implies idx==off; subtract the self-term once.
+                    acc = cx_sub(acc, cx_mul(load_u(u32(off)), sp[i]));
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), acc);
                     Apd[t] = cx_mul(scl[t], qpv);
                 }
             } else if (mode == 1u) {
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     var acc = vec2<f32>(0.0, 0.0);
                     let si = ss[i];
                     for (var j = 0u; j < n; j = j + 1u) {
-                        if (j == i) { continue; }
                         let idx = u32(si - ss[j] + off);
                         acc = cx_add(acc, cx_mul(load_u(unique_rank(idx)), sp[j]));
                     }
+                    // j==i implies idx==off; subtract the self-term once.
+                    acc = cx_sub(acc, cx_mul(load_u(unique_rank(u32(off))), sp[i]));
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), acc);
                     Apd[t] = cx_mul(scl[t], qpv);
@@ -1023,24 +1144,32 @@ fn main(
                         }
                     }
                     workgroupBarrier();
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (!live) { continue; }
                         let i = my_i[t];
                         var acc = Apd[t];
                         let si = ss[i];
                         for (var j = 0u; j < n; j = j + 1u) {
-                            if (j == i) { continue; }
                             let idx = u32(si - ss[j] + off);
                             let rank = unique_rank_g(batch, idx);
                             if (rank >= seg0 && (rank - seg0) < seglen) {
                                 acc = cx_add(acc, cx_mul(load_u(rank - seg0), sp[j]));
                             }
                         }
+                        // j==i implies idx==off; subtract the self-term once.
+                        let self_rank = unique_rank_g(batch, u32(off));
+                        if (self_rank >= seg0 && (self_rank - seg0) < seglen) {
+                            acc = cx_sub(acc, cx_mul(load_u(self_rank - seg0), sp[i]));
+                        }
                         Apd[t] = acc;
                     }
                     workgroupBarrier();
                     seg0 = seg0 + seglen;
                 }
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), Apd[t]);
@@ -1080,23 +1209,31 @@ fn main(
                         }
                     }
                     workgroupBarrier();
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (!live) { continue; }
                         let i = my_i[t];
                         var acc = Apd[t];
                         let si = ss[i];
                         for (var j = 0u; j < n; j = j + 1u) {
-                            if (j == i) { continue; }
                             let idx = u32(si - ss[j] + off);
                             if (idx >= tile0 && (idx - tile0) < tlen) {
                                 acc = cx_add(acc, cx_mul(load_u(idx - tile0), sp[j]));
                             }
+                        }
+                        // j==i implies idx==off; subtract the self-term once.
+                        let self_off = u32(off) - tile0;
+                        if (u32(off) >= tile0 && self_off < tlen) {
+                            acc = cx_sub(acc, cx_mul(load_u(self_off), sp[i]));
                         }
                         Apd[t] = acc;
                     }
                     workgroupBarrier();
                     tile0 = tile0 + tlen;
                 }
-                for (var t = 0u; t < n_own; t = t + 1u) {
+                for (var t = 0u; t < BPT; t = t + 1u) {
+                    let live = (lid + t * WG) < n;
+                    if (!live) { continue; }
                     let i = my_i[t];
                     let diag = cx_sub(vec2<f32>(q1, 0.0), Dd[t]);
                     let qpv = cx_sub(cx_mul(diag, sp[i]), Apd[t]);
@@ -1105,32 +1242,36 @@ fn main(
             }
             workgroupBarrier();
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
                         td[t] = Apd[t];
                     }
 
                     var tt_loc = vec2<f32>(0.0, 0.0);
                     var ts_loc = vec2<f32>(0.0, 0.0);
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        tt_loc = cx_add(tt_loc, cx_mul(cx_conj(td[t]), td[t]));
-                        ts_loc = cx_add(ts_loc, cx_mul(cx_conj(td[t]), sres[t]));
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) {
+                            tt_loc = cx_add(tt_loc, cx_mul(cx_conj(td[t]), td[t]));
+                            ts_loc = cx_add(ts_loc, cx_mul(cx_conj(td[t]), sres[t]));
+                        }
                     }
                     let tt = reduce_sum_c(lid, tt_loc);
                     if (cx_abs2(tt) < 1.0e-30) { col_ok = 0u; break; }
                     let ts = reduce_sum_c(lid, ts_loc);
                     omega = cx_div(ts, tt);
 
-                    for (var t = 0u; t < n_own; t = t + 1u) {
+                    for (var t = 0u; t < BPT; t = t + 1u) {
                         yd[t] = cx_add(yd[t], cx_mul(omega, sres[t]));
                         rd[t] = cx_sub(sres[t], cx_mul(omega, td[t]));
                     }
                     var r_loc = 0.0;
-                    for (var t = 0u; t < n_own; t = t + 1u) {
-                        r_loc = r_loc + cx_abs2(rd[t]);
+                    for (var t = 0u; t < BPT; t = t + 1u) {
+                        let live = (lid + t * WG) < n;
+                        if (live) { r_loc = r_loc + cx_abs2(rd[t]); }
                     }
                     let r_n = sqrt(reduce_sum_f(lid, r_loc));
                     if (r_n != r_n || r_n > 1.0e20) {
-                        for (var t = 0u; t < n_own; t = t + 1u) {
+                        for (var t = 0u; t < BPT; t = t + 1u) {
                             yd[t] = vec2<f32>(0.0, 0.0);
                         }
                         col_ok = 0u;
@@ -1146,7 +1287,9 @@ fn main(
         if (col_ok == 0u) { any_fail = 1u; }
 
         var bad_loc = 0.0;
-        for (var t = 0u; t < n_own; t = t + 1u) {
+        for (var t = 0u; t < BPT; t = t + 1u) {
+            let live = (lid + t * WG) < n;
+            if (!live) { continue; }
             var xd = cx_mul(scl[t], yd[t]);
             if (xd.x != xd.x || xd.y != xd.y || abs(xd.x) > 1.0e3 || abs(xd.y) > 1.0e3) {
                 xd = vec2<f32>(0.0, 0.0);
