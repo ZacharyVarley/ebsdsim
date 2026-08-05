@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-05
+
+### Changed
+
+- smith_iterative host dispatch: `SUBMIT_WORK_BUDGET` is now a single
+  platform-independent value (4e9). Previously it was split between macOS
+  (4e9) and Windows/Linux (1e11) to let Windows use larger tiles. With
+  `auto_queue_depth` pipelining multiple command buffers, the smaller tile
+  costs only ~3% on Windows and eliminates all platform-specific timeout
+  tuning.
+- CI: GPU test output is no longer piped through `tee` and surfaced as
+  GitHub annotations. pytest runs directly with `-v` so individual test
+  results appear in the Actions log as normal.
+
 ## [0.2.2] - 2026-08-05
 
 ### Changed

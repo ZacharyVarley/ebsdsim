@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import time
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -50,37 +49,25 @@ __all__ = [
 TILE_VRAM_BUDGET_BYTES = 1_500_000_000
 
 # One k-tile is one command buffer running RANK BiCGSTAB solves per k, so a
-# VRAM-sized tile can run for many seconds. Metal aborts command buffers that
-# run too long and silently discards every write in the submit — the buffers
-# then read back zero-initialised and the pattern is blank with no error. Bound
-# tile * iters * n^2 so a submit stays inside the driver's execution window.
+# VRAM-sized tile can run for many seconds. All GPU drivers have a watchdog
+# that kills overlong command buffers: Metal's is ~hundreds of ms, Windows
+# D3D12 TDR is ~2 s, Linux Vulkan is similar. The kill is silent — the command
+# buffer's writes are discarded and output reads back as zeros.
 #
-# Windows (D3D12) has a TDR timeout (default 2 s): a command buffer that runs
-# longer is treated as a hung GPU and the device is reset.  Linux/Vulkan has
-# similar driver watchdogs, and Metal has its own (much shorter) execution-window
-# limit.  We bound the tile so a single submit stays well under the shortest
-# applicable threshold, which also keeps the OS compositor responsive.
+# We bound the tile so one command buffer stays under the *shortest* timeout
+# (Metal's). auto_queue_depth then pipelines enough tiles to fill VRAM, so
+# throughput matches a single large tile without tripping any watchdog.
 #
-# The budget is expressed in "complex multiply-add units" per submit:
+# The budget is in "complex multiply-add units" per submit:
 #   work_per_k ≈ NOMINAL_SOLVE_ITERS * n * n
 # and the tile is capped so  tile * work_per_k ≤ SUBMIT_WORK_BUDGET.
 #
-# Metal's command-buffer timeout is on the order of hundreds of milliseconds
-# (far shorter than the Windows 2 s TDR), so it needs a much tighter budget.
 # 4e9 work-units caps the tile at 4e9 / (96 * 384²) ≈ 282 for the largest
-# bucket — proven safe on Apple Silicon in 0.2.1.
-#
-# On D3D12/Vulkan the timeout window is ~2 s, so we can afford a larger budget
-# that keeps tiles VRAM-bound in the common case (avoiding the extra submit
-# overhead of small tiles).  1e11 work-units ≈ 200-400 ms per submit on a
-# discrete GPU: well inside TDR with headroom, and VRAM binds first for all
-# but the largest-n buckets.  This is a safety net — without it, budget=0
-# allowed multi-second submits that could trip TDR and freeze the compositor.
+# bucket — proven safe on Apple Silicon. On Windows/Linux this is smaller
+# than necessary (the 2 s TDR would allow ~20× larger tiles), but the extra
+# command-buffer overhead is ~3% and eliminates all platform-specific tuning.
 NOMINAL_SOLVE_ITERS = 96
-if sys.platform == "darwin":
-    SUBMIT_WORK_BUDGET = 4_000_000_000
-else:
-    SUBMIT_WORK_BUDGET = 100_000_000_000
+SUBMIT_WORK_BUDGET = 4_000_000_000
 
 # Cap on how many command buffers to pipeline before sync.  Each buffered tile
 # costs one inten_ring scratch (chunk × n_sites × 4 B); the ring is allocated
