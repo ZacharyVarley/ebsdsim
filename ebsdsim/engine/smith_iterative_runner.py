@@ -15,6 +15,7 @@ from ebsdsim.engine.integrate import (
 )
 from ebsdsim.engine.progress import MasterPatternProgress
 from ebsdsim.gpu.dynamical.smith_iterative import (
+    auto_queue_depth,
     auto_tile_k,
     load_smith_iterative_shader,
     run_bins_dynamical,
@@ -94,10 +95,18 @@ def run_smith_iterative_voltage_integrated(
     tile = auto_tile_k(
         int(first["n_g"]), int(first["n_strong"]), int(first["n_weak"]), prep.n_sites
     )
+    # Pipeline enough small (work-bound) tiles to fill VRAM, so throughput
+    # matches a single large (VRAM-bound) tile without tripping any
+    # platform command-buffer timeout.
+    auto_depth = auto_queue_depth(
+        int(first["n_g"]), int(first["n_strong"]), int(first["n_weak"]), prep.n_sites,
+        tile=tile,
+    )
+    queue_depth = max(queue_depth, auto_depth)
     if progress is not None and progress.enabled:
         print(
             f"[ebsdsim]   Smith iterative BiCGSTAB  mode={smith_iterative_mode}  "
-            f"k_tile={tile}  bins={len(bins)}",
+            f"k_tile={tile}  qdepth={queue_depth}  bins={len(bins)}",
             flush=True,
         )
 

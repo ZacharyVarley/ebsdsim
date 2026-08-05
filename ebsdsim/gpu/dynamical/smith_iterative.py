@@ -39,6 +39,7 @@ __all__ = [
     "MAX_N_SMITH_ITERATIVE",
     "TILE_VRAM_BUDGET_BYTES",
     "auto_tile_k",
+    "auto_queue_depth",
     "load_smith_iterative_shader",
     "run_bins_dynamical",
 ]
@@ -81,6 +82,14 @@ if sys.platform == "darwin":
 else:
     SUBMIT_WORK_BUDGET = 100_000_000_000
 
+# Cap on how many command buffers to pipeline before sync.  Each buffered tile
+# costs one inten_ring scratch (chunk × n_sites × 4 B); the ring is allocated
+# up front so an unbounded depth would waste VRAM.  64 is generous: even with a
+# tiny work-bound tile of 67 (Metal, n=785) the depth would be ~17341/67 ≈ 259,
+# but we cap at 64 to keep ring VRAM under ~64 × 67 × 4 ≈ 17 KB per site —
+# negligible vs the per-k workspace.
+MAX_QUEUE_DEPTH = 64
+
 
 def _per_k_workspace_bytes(n_g: int, n: int, n_w: int, n_sites: int) -> int:
     # Mirrors _slim_workspace allocations (dominant terms).
@@ -118,6 +127,33 @@ def auto_tile_k(
     if work > 0:
         tile = min(tile, max(16, work // max(1, NOMINAL_SOLVE_ITERS * n * n)))
     return int(tile)
+
+
+def auto_queue_depth(
+    n_g: int,
+    n: int,
+    n_w: int,
+    n_sites: int,
+    *,
+    tile: int,
+    budget: int = TILE_VRAM_BUDGET_BYTES,
+    cap: int = MAX_WG_PER_DIM,
+    min_depth: int = 4,
+) -> int:
+    """How many k-tiles to pipeline before ``sync_device`` to fill VRAM.
+
+    ``auto_tile_k`` may return a work-bound tile (small, to stay under the
+    platform's command-buffer timeout).  This function computes how many such
+    tiles should be kept in flight so the total buffered VRAM matches what a
+    single VRAM-bound tile would have used — i.e. the throughput of many small
+    command buffers approximates one large one without tripping any timeout.
+    """
+    if tile <= 0:
+        return min_depth
+    per_k = _per_k_workspace_bytes(n_g, n, n_w, n_sites)
+    vram_tile = min(cap, max(256, budget // max(1, per_k)))
+    depth = max(min_depth, (vram_tile + tile - 1) // tile)
+    return min(depth, MAX_QUEUE_DEPTH)
 
 
 class _Prof:

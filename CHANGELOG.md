@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   static loop indices and a compile-time bound (`BPT`) instead of a dynamically
   indexed compact list, preventing the WGSL compiler from spilling the array to
   scratch (private) memory.
+- smith_iterative host dispatch: the k-tile size (`auto_tile_k`) and the command
+  buffer pipelining depth (`auto_queue_depth`, new) are now decoupled. The tile
+  is work-budget bound so a single command buffer stays under the platform's
+  timeout; `auto_queue_depth` pipelines enough tiles to fill VRAM, so throughput
+  approximates a single large VRAM-bound tile. This replaces the previous
+  approach of shrinking the tile to satisfy both VRAM and timeout with one
+  parameter, which on Metal produced tiles too small to keep the GPU occupied.
 
 ### Fixed
 
