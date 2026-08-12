@@ -46,6 +46,24 @@ Keep changes focused. Note user-visible changes under **Unreleased** in
 If your change touches GPU paths or save/load, run `pytest -m slow` on a machine
 with WebGPU before opening the PR.
 
+## Running CI on demand
+
+The macOS runner is the only place the Metal GPU tests run, so it is often worth
+exercising on a work-in-progress branch rather than waiting for a release. The
+[CI workflow](.github/workflows/ci.yml) accepts a manual trigger with a `jobs`
+choice of `all`, `gpu-only`, or `cpu-only`:
+
+- **Web UI:** Actions → CI → *Run workflow*, pick the branch and the job set.
+- **CLI** (requires [`gh`](https://cli.github.com/)):
+
+  ```bash
+  gh workflow run ci.yml --ref my-branch -f jobs=gpu-only
+  gh run watch
+  ```
+
+`workflow_dispatch` only appears once the workflow file is on the default
+branch, and `--ref` selects which branch's code is tested.
+
 ## Releasing
 
 Releases are published by pushing a version tag. The

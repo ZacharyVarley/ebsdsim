@@ -41,6 +41,10 @@ def _gan_pattern(*, solver: str, halfw: int = 8):
     )
     if solver == "lu_smith":
         kwargs.update(rank=6, chunk_size=64)
+    elif solver == "smith":
+        kwargs.update(rank=16)
+    elif solver == "galerkin":
+        kwargs.update(rank=6)
     return es.master_pattern_from_cif(_gan_cif(), **kwargs)
 
 
@@ -108,13 +112,13 @@ def test_save_load_roundtrip_lu_smith_per_bin(tmp_path):
 
 
 @pytest.mark.slow
-def test_save_load_roundtrip_smith_iterative_per_bin(tmp_path):
-    """smith_iterative stores real per-bin FS patterns; round-trip must preserve them."""
-    mp = _gan_pattern(solver="smith_iterative")
+def test_save_load_roundtrip_smith_per_bin(tmp_path):
+    """smith stores real per-bin FS patterns; round-trip must preserve them."""
+    mp = _gan_pattern(solver="smith")
     assert len(mp.bin_patterns) >= 1
     assert len(mp.bin_patterns) == len(mp.bin_voltages_kv)
     assert len(mp.bin_patterns) == len(mp.bin_weights)
-    out = mp.save(tmp_path / "gan_smith_iterative.npz")
+    out = mp.save(tmp_path / "gan_smith.npz")
     assert out.exists()
 
     loaded = load_master_pattern(out)

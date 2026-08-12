@@ -1,4 +1,4 @@
-"""Per-tile Smith iterative dispatch packing, mode census, and profile stage names."""
+"""Per-tile Smith dispatch packing, mode census, and profile stage names."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ _LABEL_TO_STAGE = {
     "hp:topk": "topk_radix",
     "hp:gatherslim": "gather_slim_q",
     "hp:gather": "gather_diagonal",
-    "hp:slimq": "smith_iterative_slim_q",
-    "hp:smith_iterative": "smith_iterative_shared_solve",
+    "hp:slimq": "smith_slim_q",
+    "hp:smith": "smith_shared_solve",
     "hp:inten": "intensity_fused",
 }
 
@@ -38,7 +38,7 @@ def grid_capped(total: int, *, wg: int = 256, cap: int = MAX_WG_PER_DIM) -> tupl
     return (max(1, min(need, cap)), 1, 1)
 
 
-def smith_iterative_code_digest(code: str) -> str:
+def smith_code_digest(code: str) -> str:
     """Stable short digest for pipeline cache keys (not PYTHONHASHSEED-salted)."""
     return hashlib.blake2b(code.encode(), digest_size=8).hexdigest()
 
@@ -62,7 +62,7 @@ def pack_implicit_bicg(batch: int, n: int, lu, pref, *, rank: int = RANK) -> byt
     )
 
 
-def pack_smith_iterative(batch: int, n: int, bl: np.ndarray, lu, pref, *, rank: int = RANK) -> bytes:
+def pack_smith(batch: int, n: int, bl: np.ndarray, lu, pref, *, rank: int = RANK) -> bytes:
     b = np.asarray(bl, dtype=np.float32).reshape(3, 3)
     return struct.pack(
         "<IIIIfiiiIIfffffffffff",
@@ -91,7 +91,7 @@ def pack_smith_iterative(batch: int, n: int, bl: np.ndarray, lu, pref, *, rank: 
 
 
 def count_mode_flags(st: NDArray[np.uint32]) -> tuple[int, int, int, int, int]:
-    """Census smith_iterative mode bits: dense / unique-Δ / unique-seg / BiCGSTAB / fail."""
+    """Census smith mode bits: dense / unique-Δ / unique-seg / BiCGSTAB / fail."""
     st = np.asarray(st, dtype=np.uint32)
     tiled = int(np.count_nonzero((st & np.uint32(0x80000000)) != 0))
     unique = int(np.count_nonzero((st & np.uint32(0x10000000)) != 0))
@@ -120,7 +120,7 @@ class TileDispatchCtx:
     code_gather: str
     code_slim: str
     code_gather_slim: str
-    code_smith_iterative: str
+    code_smith: str
     code_inten: str
     use_gather_slim: bool
     uses_implicit_bicg: bool
@@ -144,13 +144,13 @@ class TileDispatchCtx:
     bin_out: StorageBuffer
     intensity_buf: StorageBuffer
     write_global: int
-    smith_iterative_scratch: StorageBuffer | None
-    smith_iterative_uniq_vals: StorageBuffer | None
-    smith_iterative_uniq_meta: StorageBuffer | None
+    smith_scratch: StorageBuffer | None
+    smith_uniq_vals: StorageBuffer | None
+    smith_uniq_meta: StorageBuffer | None
 
 
 def build_tile_dispatch(ctx: TileDispatchCtx) -> list[DispatchItem]:
-    """Pure score→topk→(gather/slim)→smith_iterative→inten packing for one k-tile."""
+    """Pure score→topk→(gather/slim)→smith→inten packing for one k-tile."""
     rows = ctx.rows
     n_g = ctx.n_g
     n_use = ctx.n_use
@@ -306,12 +306,12 @@ def build_tile_dispatch(ctx: TileDispatchCtx) -> list[DispatchItem]:
     items.extend(
         [
             DispatchItem(
-                key=f"hp:smith_iterative:{smith_iterative_code_digest(ctx.code_smith_iterative)}:n{n_use}",
-                code=ctx.code_smith_iterative,
+                key=f"hp:smith:{smith_code_digest(ctx.code_smith)}:n{n_use}",
+                code=ctx.code_smith,
                 params_data=(
                     pack_implicit_bicg(rows, n_use, lu, pref, rank=ctx.rank)
                     if ctx.uses_implicit_bicg
-                    else pack_smith_iterative(rows, n_use, ctx.bl, lu, pref, rank=ctx.rank)
+                    else pack_smith(rows, n_use, ctx.bl, lu, pref, rank=ctx.rank)
                 ),
                 resources=(
                     [
@@ -335,20 +335,20 @@ def build_tile_dispatch(ctx: TileDispatchCtx) -> list[DispatchItem]:
                         ws.w_stack,
                         ctx.stats,
                     ]
-                    + ([ctx.smith_iterative_scratch] if ctx.smith_iterative_scratch is not None else [])
-                    + ([ctx.smith_iterative_uniq_vals] if ctx.smith_iterative_uniq_vals is not None else [])
-                    + ([ctx.smith_iterative_uniq_meta] if ctx.smith_iterative_uniq_meta is not None else [])
+                    + ([ctx.smith_scratch] if ctx.smith_scratch is not None else [])
+                    + ([ctx.smith_uniq_vals] if ctx.smith_uniq_vals is not None else [])
+                    + ([ctx.smith_uniq_meta] if ctx.smith_uniq_meta is not None else [])
                 ),
                 workgroups=(rows, 1, 1),
-                label="hp:smith_iterative",
+                label="hp:smith",
                 n_storage_bindings=(
                     8
                     if ctx.uses_implicit_bicg
                     else (
                         8
-                        + (1 if ctx.smith_iterative_scratch is not None else 0)
-                        + (1 if ctx.smith_iterative_uniq_vals is not None else 0)
-                        + (1 if ctx.smith_iterative_uniq_meta is not None else 0)
+                        + (1 if ctx.smith_scratch is not None else 0)
+                        + (1 if ctx.smith_uniq_vals is not None else 0)
+                        + (1 if ctx.smith_uniq_meta is not None else 0)
                     )
                 ),
                 uniform_size=48 if ctx.uses_implicit_bicg else 96,

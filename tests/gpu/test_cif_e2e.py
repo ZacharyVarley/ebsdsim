@@ -18,7 +18,7 @@ def _suite_params() -> list:
     return [pytest.param(p, id=p.stem) for p in _CIF_PATHS]
 
 
-def _gpu_smith_iterative_available() -> bool:
+def _gpu_smith_available() -> bool:
     try:
         require_gpu(required_features=("shader-f16",))
         return True
@@ -30,7 +30,7 @@ pytestmark = [
     pytest.mark.gpu,
     pytest.mark.slow,
     pytest.mark.skipif(
-        not _gpu_smith_iterative_available(),
+        not _gpu_smith_available(),
         reason="WebGPU adapter with shader-f16 unavailable",
     ),
 ]
@@ -38,7 +38,7 @@ pytestmark = [
 
 @pytest.mark.parametrize("cif_path", _suite_params())
 def test_master_pattern_cif_suite_halfw10(cif_path: Path) -> None:
-    """Smith iterative E2E on each suite CIF at halfw=10 (21×21 Lambert)."""
+    """Smith E2E on each suite CIF at halfw=10 (21×21 Lambert)."""
     mp = es.master_pattern_from_cif(
         cif_path,
         voltage_kv=20.0,
@@ -47,11 +47,12 @@ def test_master_pattern_cif_suite_halfw10(cif_path: Path) -> None:
         energy_binwidth_keV=5.0,
         marginal_coverage=1.0,
         mc_backend="surrogate",
-        solver="smith_iterative",
+        solver="smith",
+        rank=16,
         verbosity=0,
     )
     ctx = (
-        f"mode={mp.metadata.get('smith_iterative_mode')} "
+        f"mode={mp.metadata.get('smith_mode')} "
         f"fail_k={mp.metadata.get('fail_k')} "
         f"k_solved={mp.metadata.get('k_solved')} "
         f"k_per_s={mp.metadata.get('k_per_s')}"
@@ -60,7 +61,7 @@ def test_master_pattern_cif_suite_halfw10(cif_path: Path) -> None:
     assert mp.pattern.shape == (side, side)
     assert mp.metadata["grid_size"] == side
     assert mp.metadata["halfw"] == 10
-    assert mp.metadata["solver"] == "smith_iterative"
+    assert mp.metadata["solver"] == "smith"
     assert int(mp.metadata.get("fail_k", 0)) == 0, ctx
     assert np.all(np.isfinite(mp.pattern)), ctx
     assert np.any(mp.pattern > 0), ctx

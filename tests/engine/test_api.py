@@ -38,6 +38,29 @@ def test_preset_cif_and_halfw():
     assert validate_verbosity(0) == 0
 
 
+def test_public_defaults():
+    """Pin the shipped defaults and keep the two places they live in sync."""
+    import inspect
+
+    from ebsdsim.engine.params import SimParams
+
+    expected = {"solver": "galerkin", "rank": 8, "halfw": 500}
+    defaults = SimParams()
+    assert {k: getattr(defaults, k) for k in expected} == expected
+
+    # api.master_pattern restates every default in its signature; drift between
+    # the two would silently give the two entry points different behaviour.
+    signature = inspect.signature(es.master_pattern)
+    restated = {
+        name: param.default
+        for name, param in signature.parameters.items()
+        if param.default is not inspect.Parameter.empty
+    }
+    assert restated == {
+        name: getattr(defaults, name) for name in restated if hasattr(defaults, name)
+    }
+
+
 @pytest.mark.skipif(not _gpu_available(), reason="WebGPU adapter unavailable")
 @pytest.mark.slow
 def test_master_pattern_exact_slow_cpu_tiny():

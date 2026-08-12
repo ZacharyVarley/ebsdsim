@@ -1,6 +1,6 @@
-"""Portable fallback ladder for smith_iterative Toeplitz Smith (shared-memory matvecs).
+"""Portable fallback ladder for Smith Toeplitz packs (shared-memory matvecs).
 
-Decision per k (after LLL smith_iterative reindex of strong beams):
+Decision per k (after LLL Smith reindex of strong beams):
 
 ```text
 plen = d0·d1·d2          # dense Toeplitz box size (f16c2 slots)
@@ -40,7 +40,7 @@ rescan plen every segment.
 
 Shaders
 -------
-- BiCGSTAB: ``wgsl/smith_iterative_build_uniq_shared_bicgstab_f16.wgsl``
+- BiCGSTAB: ``wgsl/smith_build_uniq_shared_bicgstab_f16.wgsl``
   bit28 = unique, bit29 = BiCGSTAB, bit30 = unique-seg, bit31 = dense tile
 """
 
@@ -69,6 +69,10 @@ _BUCKET_TABLE = (
 )
 # red_re/red_im (2*256*4 B) + geom (128 B) + scalars.
 _OVERHEAD_BYTES = 2200
+# Galerkin solve adds g_rdiag (16×4) + g_kept (+ alignment) ≈ +68 B workgroup
+# storage. Keep smith at 2200 so its shared-memory tiling / pack buckets are
+# unchanged; callers of the galerkin path must pass GALERKIN_OVERHEAD_BYTES.
+GALERKIN_OVERHEAD_BYTES = 2400
 _MIN_PACK = 1024
 # Shared unique meta (META_BITS_SLOTS 939 + MAX_UWORDS_SHARED 625) packed into
 # the spack tail beyond MAX_UNIQ.
@@ -77,7 +81,11 @@ DEFAULT_SHARED_BUDGET = 49152
 
 
 def bucket_params_for_n(
-    n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET, pack_entry_bytes: int = 4
+    n: int,
+    *,
+    shared_budget: int = DEFAULT_SHARED_BUDGET,
+    pack_entry_bytes: int = 4,
+    overhead_bytes: int = _OVERHEAD_BYTES,
 ) -> tuple[int, int, int, int]:
     """(MAX_N, MAX_PACK, MAX_UNIQ, BPT) for beam count ``n``.
 
@@ -86,6 +94,9 @@ def bucket_params_for_n(
     (resident → unique-Δ → unique-seg → dense tile) instead of failing
     pipeline creation. ``pack_entry_bytes`` is 4 for the f16 spack variant
     and 8 for the f32 variant (used to A/B Metal f16 behavior).
+
+    Pass ``overhead_bytes=GALERKIN_OVERHEAD_BYTES`` when sizing buckets for the
+    Galerkin solve shader (extra ``g_rdiag`` / ``g_kept`` workgroup storage).
     """
     n = int(n)
     if n <= 1024:
@@ -97,14 +108,15 @@ def bucket_params_for_n(
         pack, uniq, bpt = 0, 0, max_n // 256
     else:
         raise ValueError(
-            f"smith_iterative shader supports at most {MAX_BEAMS} beams "
+            f"Smith shader supports at most {MAX_BEAMS} beams "
             f"(Krylov workgroup arrays), got {n}"
         )
     entry = max(4, int(pack_entry_bytes))
-    avail = (int(shared_budget) - max_n * 16 - _OVERHEAD_BYTES) // entry
+    overhead = int(overhead_bytes)
+    avail = (int(shared_budget) - max_n * 16 - overhead) // entry
     if avail < _MIN_PACK:
         raise ValueError(
-            f"n={n} beams needs {max_n * 16 + _OVERHEAD_BYTES + _MIN_PACK * entry} B "
+            f"n={n} beams needs {max_n * 16 + overhead + _MIN_PACK * entry} B "
             f"of workgroup storage but the device allows {shared_budget} B"
         )
     if pack:
@@ -114,6 +126,18 @@ def bucket_params_for_n(
         max_pack = max(_MIN_PACK, avail)
         max_uniq = max(0, max_pack - _META_SLOTS)
     return max_n, max_pack, max_uniq, bpt
+
+
+def galerkin_bucket_params_for_n(
+    n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET, pack_entry_bytes: int = 4
+) -> tuple[int, int, int, int]:
+    """Like ``bucket_params_for_n`` but reserves Galerkin epilogue shared overhead."""
+    return bucket_params_for_n(
+        n,
+        shared_budget=shared_budget,
+        pack_entry_bytes=pack_entry_bytes,
+        overhead_bytes=GALERKIN_OVERHEAD_BYTES,
+    )
 
 
 def max_pack_for_n(n: int, *, shared_budget: int = DEFAULT_SHARED_BUDGET) -> int:

@@ -1,4 +1,4 @@
-"""Smith iterative per-bin intensity stack (host readback) correctness."""
+"""Smith per-bin intensity stack (host readback) correctness."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ebsdsim.gpu.device import require_gpu
 from ebsdsim.io.load import load_master_pattern
 
 
-def _gpu_smith_iterative_available() -> bool:
+def _gpu_smith_available() -> bool:
     try:
         require_gpu(required_features=("shader-f16",))
         return True
@@ -25,13 +25,13 @@ pytestmark = [
     pytest.mark.gpu,
     pytest.mark.slow,
     pytest.mark.skipif(
-        not _gpu_smith_iterative_available(),
+        not _gpu_smith_available(),
         reason="WebGPU adapter with shader-f16 unavailable",
     ),
 ]
 
 
-def _run_smith_iterative(cif: Path, *, halfw: int = 12, energy_binwidth_keV: float = 5.0) -> es.MasterPattern:
+def _run_smith(cif: Path, *, halfw: int = 12, energy_binwidth_keV: float = 5.0) -> es.MasterPattern:
     return es.master_pattern_from_cif(
         cif,
         voltage_kv=20.0,
@@ -40,7 +40,8 @@ def _run_smith_iterative(cif: Path, *, halfw: int = 12, energy_binwidth_keV: flo
         energy_binwidth_keV=energy_binwidth_keV,
         marginal_coverage=1.0,
         mc_backend="surrogate",
-        solver="smith_iterative",
+        solver="smith",
+        rank=16,
         verbosity=0,
     )
 
@@ -53,10 +54,10 @@ def _run_smith_iterative(cif: Path, *, halfw: int = 12, energy_binwidth_keV: flo
     ],
     ids=["Ni", "GaN"],
 )
-def test_smith_iterative_per_bin_stack_matches_integrated(cif: Path, label: str) -> None:
+def test_smith_per_bin_stack_matches_integrated(cif: Path, label: str) -> None:
     """Per-bin stack is finite/non-negative and weight-sums to integrated."""
     assert cif.is_file(), f"missing CIF: {cif}"
-    mp = _run_smith_iterative(cif, halfw=12, energy_binwidth_keV=5.0)
+    mp = _run_smith(cif, halfw=12, energy_binwidth_keV=5.0)
     n_bins = len(mp.bin_voltages_kv)
     assert n_bins >= 1
     assert len(mp.bin_patterns) == n_bins
@@ -82,13 +83,13 @@ def test_smith_iterative_per_bin_stack_matches_integrated(cif: Path, label: str)
     )
 
 
-def test_smith_iterative_per_bin_save_load_reconstruct(tmp_path) -> None:
-    """Saved smith_iterative run reloads with real bins; reconstruct_bin matches raster."""
+def test_smith_per_bin_save_load_reconstruct(tmp_path) -> None:
+    """Saved smith run reloads with real bins; reconstruct_bin matches raster."""
     cif = Path(str(importlib.resources.files("ebsdsim").joinpath("data/preset_cifs/GaN.cif")))
-    mp = _run_smith_iterative(cif, halfw=12, energy_binwidth_keV=5.0)
+    mp = _run_smith(cif, halfw=12, energy_binwidth_keV=5.0)
     assert len(mp.bin_patterns) == len(mp.bin_voltages_kv) >= 1
 
-    out = mp.save(tmp_path / "gan_smith_iterative_bins.npz")
+    out = mp.save(tmp_path / "gan_smith_bins.npz")
     loaded = load_master_pattern(out)
     assert loaded.n_bins == len(mp.bin_voltages_kv)
     assert loaded.n_bins == int(loaded.bin_fs.shape[0])

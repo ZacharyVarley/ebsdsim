@@ -1,4 +1,4 @@
-"""Live Smith iterative vs LU–Smith FS accuracy (no golden files)."""
+"""Live Smith vs LU–Smith FS accuracy (no golden files)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _COMPARE = [
 ]
 
 
-def _gpu_smith_iterative_available() -> bool:
+def _gpu_smith_available() -> bool:
     try:
         require_gpu(required_features=("shader-f16",))
         return True
@@ -32,7 +32,7 @@ pytestmark = [
     pytest.mark.gpu,
     pytest.mark.slow,
     pytest.mark.skipif(
-        not _gpu_smith_iterative_available(),
+        not _gpu_smith_available(),
         reason="WebGPU adapter with shader-f16 unavailable",
     ),
 ]
@@ -62,14 +62,14 @@ def _site_weighted_fs(mp: es.MasterPattern) -> np.ndarray:
 
 
 @pytest.mark.parametrize("cif_path,label", _COMPARE, ids=[label for _, label in _COMPARE])
-def test_smith_iterative_vs_lu_smith_fs_p95(cif_path: Path, label: str) -> None:
+def test_smith_vs_lu_smith_fs_p95(cif_path: Path, label: str) -> None:
     """Site-weighted FS p95 relative error vs LU–Smith must stay under 1e-2."""
     assert cif_path.is_file(), f"missing CIF fixture: {cif_path}"
 
-    si = _run(cif_path, solver="smith_iterative")
+    si = _run(cif_path, solver="smith")
     lu = _run(cif_path, solver="lu_smith")
 
-    assert si.metadata["solver"] == "smith_iterative"
+    assert si.metadata["solver"] == "smith"
     assert lu.metadata["solver"] == "lu_smith"
     assert int(si.metadata.get("fail_k", 0)) == 0
     assert si.n_k == lu.n_k

@@ -13,7 +13,7 @@ What drives the pattern
 **Monte Carlo** -- ``mc_backend``, ``mc_auto_stop``, ``mc_relative_tol``,
 ``n_trajectories``
 
-**Dynamical diffraction** -- ``bethe_c_strong``, ``bethe_c_weak``,
+**Dynamical diffraction** -- ``solver``, ``bethe_c_strong``, ``bethe_c_weak``,
 ``bethe_c_cutoff``, ``dbdiff_sg_cutoff``, ``rank``, ``dmin``,
 ``exact_slow_cpu``, ``verbosity``
 
@@ -45,19 +45,20 @@ Dynamical diffraction
 The solve uses the Bloch formulation. Bethe perturbation theory ranks reflections
 (``bethe_c_*`` cutoffs).
 
-+----------------------+-----------+-----------------------------------------------+
-| Parameter            | Default   | Role                                          |
-+======================+===========+===============================================+
-| ``bethe_c_strong``   | ``20.0``  | Strong-beam excitation-score threshold        |
-| ``bethe_c_weak``     | ``40.0``  | Weak-beam threshold band                      |
-| ``bethe_c_cutoff``   | ``200.0`` | Upper cutoff; beams above are excluded        |
-| ``dbdiff_sg_cutoff`` | ``1.0``   | Double-diffraction excitation admission       |
-| ``rank``             | ``20``    | Smith / Lyapunov truncation rank              |
-| ``dmin``             | ``0.05``  | Minimum *d*-spacing (nm)                      |
-| ``halfw``            | ``250``   | Lambert half-width (501 by 501 at default)    |
-| ``exact_slow_cpu``   | ``False`` | Full-rank CPU Lyapunov (``numpy.linalg.eig``) |
-| ``verbosity``        | ``0``     | Progress: 0 silent, 1 bins, 2 chunks          |
-+----------------------+-----------+-----------------------------------------------+
++----------------------+--------------+-----------------------------------------------+
+| Parameter            | Default      | Role                                          |
++======================+==============+===============================================+
+| ``solver``           | ``galerkin`` | Dynamical backend (Galerkin RKSM by default)  |
+| ``rank``             | ``8``        | Krylov / Lyapunov rank (fixed, not adaptive)  |
+| ``bethe_c_strong``   | ``20.0``     | Strong-beam excitation-score threshold        |
+| ``bethe_c_weak``     | ``40.0``     | Weak-beam threshold band                      |
+| ``bethe_c_cutoff``   | ``200.0``    | Upper cutoff; beams above are excluded        |
+| ``dbdiff_sg_cutoff`` | ``1.0``      | Double-diffraction excitation admission       |
+| ``dmin``             | ``0.05``     | Minimum *d*-spacing (nm)                      |
+| ``halfw``            | ``500``      | Lambert half-width (1001 by 1001 at default)  |
+| ``exact_slow_cpu``   | ``False``    | Full-rank CPU Lyapunov (``numpy.linalg.eig``) |
+| ``verbosity``        | ``0``        | Progress: 0 silent, 1 bins, 2 chunks          |
++----------------------+--------------+-----------------------------------------------+
 
 Display scaling: :meth:`~ebsdsim.MasterPattern.lambert_data` with
 ``normalize="minmax"`` or ``normalize="robust"``.

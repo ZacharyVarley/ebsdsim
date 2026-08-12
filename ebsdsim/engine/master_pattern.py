@@ -219,7 +219,7 @@ def _finish_master_pattern(
     )
 
 
-def _run_smith_iterative(
+def _run_galerkin(
     *,
     cell: SimCell,
     params: SimParams,
@@ -232,15 +232,15 @@ def _run_smith_iterative(
     max_bins_run: int | None = None,
     max_chunks: int | None = None,
 ) -> MasterPattern:
-    # Lazy: smith_iterative path needs shader-f16 + GPU raster modules.
-    from ebsdsim.engine.smith_iterative_runner import run_smith_iterative_voltage_integrated
+    # Lazy: galerkin path needs shader-f16 + GPU raster modules.
+    from ebsdsim.engine.galerkin_runner import run_galerkin_voltage_integrated
     from ebsdsim.gpu.raster import GpuLambertRasterizer, build_master_pattern_data_gpu
 
     rank = int(params.rank)
-    if rank != 16:
+    if rank < 1 or rank > 16:
         raise ValueError(
-            f"smith_iterative solver currently supports rank=16 (the intensity "
-            f"contraction shader has a compile-time MAX_RANK=16), got rank={rank}."
+            f"galerkin solver supports rank in [1, 16] "
+            f"(intensity contraction MAX_RANK=16), got rank={rank}."
         )
     grid_size = 1 + 2 * params.halfw
     ctx = require_gpu(required_features=("shader-f16",))
@@ -251,7 +251,7 @@ def _run_smith_iterative(
         n_k=0,
     )
     try:
-        integrated_result, smith_iterative_meta = run_smith_iterative_voltage_integrated(
+        integrated_result, gal_meta = run_galerkin_voltage_integrated(
             cell=cell,
             mc=mc,
             halfw=params.halfw,
@@ -267,9 +267,9 @@ def _run_smith_iterative(
             relative_image_stop=params.relative_image_stop,
             max_bins_run=max_bins_run,
             max_chunks=max_chunks,
-            rank=int(params.rank),
+            rank=rank,
         )
-        pg_grid = smith_iterative_meta["pg_grid"]
+        pg_grid = gal_meta["pg_grid"]
         n_k = int(integrated_result.n_k)
         site_weights = site_weights_from_cell(cell)
         kij = pg_grid.kij.reshape(-1, 3).astype(np.int32, copy=False)
@@ -295,11 +295,12 @@ def _run_smith_iterative(
         kernels.destroy()
 
     extras = {
-        "smith_iterative_mode": smith_iterative_meta.get("smith_iterative_mode"),
-        "fail_k": smith_iterative_meta.get("fail_k"),
-        "k_per_s": smith_iterative_meta.get("k_per_s"),
-        "dyn_wall_s": smith_iterative_meta.get("dyn_wall_s"),
-        "k_solved": smith_iterative_meta.get("k_solved"),
+        "galerkin_mode": gal_meta.get("galerkin_mode"),
+        "lyapunov_strategy": gal_meta.get("lyapunov_strategy"),
+        "fail_k": gal_meta.get("fail_k"),
+        "k_per_s": gal_meta.get("k_per_s"),
+        "dyn_wall_s": gal_meta.get("dyn_wall_s"),
+        "k_solved": gal_meta.get("k_solved"),
     }
     return _finish_master_pattern(
         cell=cell,
@@ -313,7 +314,109 @@ def _run_smith_iterative(
         data=data,
         axes=axes,
         kij=kij,
-        solver_label="smith_iterative",
+        solver_label="galerkin",
+        rank=rank,
+        exact_slow_cpu=False,
+        structure_meta=structure_meta,
+        extras=extras,
+    )
+
+
+def _run_smith(
+    *,
+    cell: SimCell,
+    params: SimParams,
+    mc,
+    mc_backend_label: str,
+    progress: MasterPatternProgress,
+    source: str,
+    mode: MasterPatternMode,
+    structure_meta: dict[str, Any] | None,
+    max_bins_run: int | None = None,
+    max_chunks: int | None = None,
+) -> MasterPattern:
+    # Lazy: smith path needs shader-f16 + GPU raster modules.
+    from ebsdsim.engine.smith_runner import run_smith_voltage_integrated
+    from ebsdsim.gpu.raster import GpuLambertRasterizer, build_master_pattern_data_gpu
+
+    rank = int(params.rank)
+    if rank != 16:
+        raise ValueError(
+            f"smith solver currently supports rank=16 (the intensity "
+            f"contraction shader has a compile-time MAX_RANK=16), got rank={rank}."
+        )
+    grid_size = 1 + 2 * params.halfw
+    ctx = require_gpu(required_features=("shader-f16",))
+    kernels = EBSDDynamicalKernels(ctx.device, ctx.queue)
+    progress.run_banner(
+        mc_backend=mc_backend_label,
+        n_bins=int(mc.voltages_kv.size),
+        n_k=0,
+    )
+    try:
+        integrated_result, smith_meta = run_smith_voltage_integrated(
+            cell=cell,
+            mc=mc,
+            halfw=params.halfw,
+            dmin=params.dmin,
+            voltage_kv=params.voltage_kv,
+            bethe_c_strong=params.bethe_c_strong,
+            bethe_c_weak=params.bethe_c_weak,
+            bethe_c_cutoff=params.bethe_c_cutoff,
+            dbdiff_sg_cutoff=params.dbdiff_sg_cutoff,
+            kernels=kernels,
+            progress=progress,
+            marginal_coverage=params.marginal_coverage,
+            relative_image_stop=params.relative_image_stop,
+            max_bins_run=max_bins_run,
+            max_chunks=max_chunks,
+            rank=int(params.rank),
+        )
+        pg_grid = smith_meta["pg_grid"]
+        n_k = int(integrated_result.n_k)
+        site_weights = site_weights_from_cell(cell)
+        kij = pg_grid.kij.reshape(-1, 3).astype(np.int32, copy=False)
+        rasterizer = GpuLambertRasterizer(
+            ctx.device, ctx.queue, pg_grid, pipelines=kernels.pipelines
+        )
+        try:
+            data, axes = build_master_pattern_data_gpu(
+                rasterizer,
+                integrated_fs=np.asarray(integrated_result.integrated, dtype=np.float32).reshape(
+                    n_k, integrated_result.n_sites
+                ),
+                bin_fs=stack_bins(list(integrated_result.bin_patterns), n_k, integrated_result.n_sites),
+                kij=kij,
+                hw=params.halfw,
+                side=grid_size,
+                needs_southern_hemisphere=bool(np.any(pg_grid.khat.reshape(-1, 3)[:, 2] < -1e-9)),
+                site_weights=site_weights,
+            )
+        finally:
+            rasterizer.destroy()
+    finally:
+        kernels.destroy()
+
+    extras = {
+        "smith_mode": smith_meta.get("smith_mode"),
+        "fail_k": smith_meta.get("fail_k"),
+        "k_per_s": smith_meta.get("k_per_s"),
+        "dyn_wall_s": smith_meta.get("dyn_wall_s"),
+        "k_solved": smith_meta.get("k_solved"),
+    }
+    return _finish_master_pattern(
+        cell=cell,
+        params=params,
+        source=source,
+        mode=mode,
+        mc=mc,
+        mc_backend_label=mc_backend_label,
+        integrated_result=integrated_result,
+        pg_grid=pg_grid,
+        data=data,
+        axes=axes,
+        kij=kij,
+        solver_label="smith",
         rank=int(params.rank),
         exact_slow_cpu=False,
         structure_meta=structure_meta,
@@ -501,8 +604,21 @@ def run_master_pattern(
 
     mc, mc_backend_label = _build_mc(cell, params)
 
-    if choice == "smith_iterative":
-        return _run_smith_iterative(
+    if choice == "galerkin":
+        return _run_galerkin(
+            cell=cell,
+            params=params,
+            mc=mc,
+            mc_backend_label=mc_backend_label,
+            progress=progress,
+            source=source,
+            mode=mode,
+            structure_meta=structure_meta,
+            max_bins_run=max_bins_run,
+            max_chunks=max_chunks,
+        )
+    if choice == "smith":
+        return _run_smith(
             cell=cell,
             params=params,
             mc=mc,

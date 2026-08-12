@@ -1,5 +1,5 @@
-// Fused gather_diagonal + smith_iterative_slim_q (one WG per k).
-// Writes d_a from sg[idx], then assembles e0 / q_values like ebsd_smith_iterative_slim_q.
+// Fused gather_diagonal + smith_slim_q (one WG per k).
+// Writes d_a from sg[idx], then assembles e0 / q_values like ebsd_smith_slim_q.
 //
 // Dispatch: (batch_count, 1, 1), @workgroup_size(256)
 // Params packing: <4I4i8f

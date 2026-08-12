@@ -4,7 +4,7 @@ Host wrappers live under `ebsdsim/gpu/` and mirror these folders:
 
 | Shader folder | Host |
 |---|---|
-| `dynamical/` | `gpu/dynamical/` (LU–Smith stages + Smith iterative) |
+| `dynamical/` | `gpu/dynamical/` (LU–Smith stages + Smith) |
 | `lu/` | `gpu/lu.py` |
 | `mc/` | `gpu/monte_carlo.py` |
 | `lambert/` | `gpu/raster.py` |
@@ -21,6 +21,6 @@ Load shaders with `ebsdsim.gpu.pipelines.load_wgsl("dynamical/excitation_score.w
 ## Add a kernel checklist
 
 1. Drop the `.wgsl` into the matching folder under `gpu/shaders/`.
-2. Add a host wrapper in the matching stage module (`gpu/dynamical/score.py`, `smith_iterative.py`, …) that packs uniforms and calls `PipelineCache.dispatch_with_params` / `PersistentSubmitter`.
+2. Add a host wrapper in the matching stage module (`gpu/dynamical/score.py`, `smith.py`, …) that packs uniforms and calls `PipelineCache.dispatch_with_params` / `PersistentSubmitter`.
 3. Add a test under `tests/gpu/` (mark `@pytest.mark.gpu`).
 4. If the kernel needs `shader-f16`, ensure `require_gpu(required_features=("shader-f16",))` on that path.

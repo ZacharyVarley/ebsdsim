@@ -1,4 +1,4 @@
-"""Smith iterative WGSL bucketing: MAX_N / MAX_PACK / MAX_UNIQ / BPT templates."""
+"""Smith WGSL bucketing: MAX_N / MAX_PACK / MAX_UNIQ / BPT templates."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from ebsdsim.gpu.pipelines import load_wgsl
 # Krylov still keeps ss/sord/sp in workgroup memory sized MAX_N. Pack TILE has
 # no plen ceiling, but beam count is capped by the device workgroup-storage
 # budget (ss+sord+sp+spack).
-MAX_N_SMITH_ITERATIVE = 2048
+MAX_N_SMITH = 2048
 
 
 def _spack_to_f32(code: str) -> str:
@@ -26,7 +26,7 @@ def _spack_to_f32(code: str) -> str:
     return code
 
 
-def bucket_uniq_smith_iterative(
+def bucket_uniq_smith(
     code: str,
     n: int,
     *,
@@ -37,11 +37,19 @@ def bucket_uniq_smith_iterative(
     force_dense_tile: bool = False,
     use_global_uniq_vals: bool = True,
     use_f32: bool = False,
+    bucket_params: tuple[int, int, int, int] | None = None,
 ) -> tuple[str, str]:
-    """String-replace MAX_N / MAX_PACK / MAX_UNIQ / BPT for the device budget."""
-    max_n, max_pack, max_uniq, bpt = bucket_params_for_n(
-        n, shared_budget=shared_budget, pack_entry_bytes=8 if use_f32 else 4
-    )
+    """String-replace MAX_N / MAX_PACK / MAX_UNIQ / BPT for the device budget.
+
+    Pass ``bucket_params`` to override the default Smith ladder sizing (e.g.
+    Galerkin via :func:`~ebsdsim.gpu.dynamical.ladder.galerkin_bucket_params_for_n`).
+    """
+    if bucket_params is None:
+        max_n, max_pack, max_uniq, bpt = bucket_params_for_n(
+            n, shared_budget=shared_budget, pack_entry_bytes=8 if use_f32 else 4
+        )
+    else:
+        max_n, max_pack, max_uniq, bpt = bucket_params
 
     def _sync_seg(c: str) -> str:
         # With global bitset/prefix, SEG may be up to MAX_PACK (full shared values).
@@ -84,7 +92,7 @@ def bucket_uniq_smith_iterative(
     return code, tag
 
 
-def load_smith_iterative_shader(
+def load_smith_shader(
     n: int,
     wgsl_dir: Path | None = None,
     *,
@@ -95,14 +103,14 @@ def load_smith_iterative_shader(
     use_global_uniq_vals: bool = True,
     use_f32: bool = False,
 ) -> tuple[str, str]:
-    """Load the beam-bucketed BiCGSTAB smith_iterative kernel (resident / unique-Δ / tile)."""
-    name = "dynamical/smith_iterative_build_uniq_shared_bicgstab_f16.wgsl"
+    """Load the beam-bucketed BiCGSTAB smith kernel (resident / unique-Δ / tile)."""
+    name = "dynamical/smith_build_uniq_shared_bicgstab_f16.wgsl"
     solver = "bicgstab"
     if wgsl_dir is not None:
         code = Path(wgsl_dir).joinpath(Path(name).name).read_text(encoding="utf-8")
     else:
         code = load_wgsl(name)
-    return bucket_uniq_smith_iterative(
+    return bucket_uniq_smith(
         code,
         n,
         solver=solver,

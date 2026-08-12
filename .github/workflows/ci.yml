@@ -5,9 +5,19 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Which jobs to run"
+        type: choice
+        default: all
+        options: [all, gpu-only, cpu-only]
 
 jobs:
   test-cpu:
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || contains(fromJSON('["all", "cpu-only"]'), inputs.jobs)
     name: CPU tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -36,6 +46,9 @@ jobs:
 
   test-gpu:
     name: GPU tests (macos, Metal)
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || contains(fromJSON('["all", "gpu-only"]'), inputs.jobs)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +65,7 @@ jobs:
 
   build:
     name: Build wheel
+    if: github.event_name != 'workflow_dispatch' || inputs.jobs == 'all'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +92,7 @@ jobs:
 
   docs:
     name: Build documentation
+    if: github.event_name != 'workflow_dispatch' || inputs.jobs == 'all'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

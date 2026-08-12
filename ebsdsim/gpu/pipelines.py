@@ -28,29 +28,53 @@ def load_wgsl(name: str) -> str:
     return code
 
 
-def infer_storage_read_only(wgsl: str, n_storage_bindings: int) -> list[bool]:
-    """Infer read-only flags from ``@binding(N) var<storage, read>`` declarations."""
-    ro = [False] * n_storage_bindings
+def infer_storage_read_only(
+    wgsl: str,
+    n_storage_bindings: int,
+    *,
+    binding_indices: list[int] | None = None,
+) -> list[bool]:
+    """Infer read-only flags from ``@binding(N) var<storage, …>`` declarations.
+
+    When ``binding_indices`` is ``None``, storage bindings are assumed to occupy
+    contiguous slots ``1..n_storage_bindings`` (historical behaviour). When
+    provided, one flag is returned per index so sparse layouts (e.g. bindings
+    14/15 with 12/13 reserved) classify correctly.
+    """
+    indices = (
+        list(binding_indices)
+        if binding_indices is not None
+        else list(range(1, int(n_storage_bindings) + 1))
+    )
+    ro_by_binding: dict[int, bool] = {}
     for match in re.finditer(
         r"@binding\((\d+)\)\s+var<storage,\s*(read|read_write)>",
         wgsl,
     ):
         binding = int(match.group(1))
-        if 1 <= binding <= n_storage_bindings:
-            ro[binding - 1] = match.group(2) == "read"
-    return ro
+        ro_by_binding[binding] = match.group(2) == "read"
+    return [bool(ro_by_binding.get(b, False)) for b in indices]
 
 
 def resolve_storage_read_only(
     wgsl: str,
     n_storage_bindings: int,
     explicit: bool | list[bool] | None,
+    *,
+    binding_indices: list[int] | None = None,
 ) -> list[bool]:
+    n = (
+        len(binding_indices)
+        if binding_indices is not None
+        else int(n_storage_bindings)
+    )
     if explicit is not None:
         if isinstance(explicit, bool):
-            return [explicit] * n_storage_bindings
+            return [explicit] * n
         return list(explicit)
-    return infer_storage_read_only(wgsl, n_storage_bindings)
+    return infer_storage_read_only(
+        wgsl, n_storage_bindings, binding_indices=binding_indices
+    )
 
 
 def workgroups_1d(count: int, wg_size: int) -> tuple[int, int, int]:
@@ -171,22 +195,28 @@ class PipelineCache:
             storage_read_only=storage_read_only,
         )
 
+        # Local import avoids a pipelines↔batch cycle at module load.
+        from ebsdsim.gpu.batch import ResourceBinding, resource_binding_index
+
         entries: list[dict[str, Any]] = [
             {"binding": 0, "resource": {"buffer": params_buf, "size": params_size}}
         ]
         for i, resource in enumerate(resources):
-            if isinstance(resource, StorageBuffer):
-                binding = resource.buffer_binding()
-            elif isinstance(resource, BufferResource):
-                size = resource.size if resource.size is not None else None
+            raw = resource.resource if isinstance(resource, ResourceBinding) else resource
+            if isinstance(raw, StorageBuffer):
+                binding = raw.buffer_binding()
+            elif isinstance(raw, BufferResource):
+                size = raw.size if raw.size is not None else None
                 binding = (
-                    {"buffer": resource.buffer, "size": size}
+                    {"buffer": raw.buffer, "size": size}
                     if size is not None
-                    else {"buffer": resource.buffer}
+                    else {"buffer": raw.buffer}
                 )
             else:
-                binding = resource
-            entries.append({"binding": i + 1, "resource": binding})
+                binding = raw
+            entries.append(
+                {"binding": resource_binding_index(resource, i), "resource": binding}
+            )
 
         bind_group = self.device.create_bind_group(
             layout=layout, entries=entries, label=f"{label}:bg"

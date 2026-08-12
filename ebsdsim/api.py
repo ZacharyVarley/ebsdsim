@@ -1,7 +1,7 @@
 """Public API for EBSD master-pattern generation.
 
 Ångström ``Cell`` / ``Atom`` in; conversion to nm ``SimCell`` happens once in
-:mod:`ebsdsim.crystal.build`. Default dynamical solver is Smith iterative.
+:mod:`ebsdsim.crystal.build`. Default dynamical solver is Galerkin (RKSM).
 """
 
 from __future__ import annotations
@@ -123,14 +123,14 @@ def master_pattern(
     material: Material,
     *,
     voltage_kv: float = 20.0,
-    halfw: int = 250,
+    halfw: int = 500,
     dmin: float = 0.05,
     energy_binwidth_keV: float = 1.0,
     n_trajectories: int = 1_048_576,
     sigma_deg: float = 70.0,
     omega_deg: float = 0.0,
-    solver: Literal["smith_iterative", "lu_smith"] = "smith_iterative",
-    rank: int = 16,
+    solver: Literal["galerkin", "smith", "lu_smith"] = "galerkin",
+    rank: int = 8,
     exact_slow_cpu: bool = False,
     verbosity: int = 0,
     chunk_size: int = 256,
@@ -158,7 +158,7 @@ def master_pattern(
     voltage_kv : float
         Beam energy in kV (default ``20``).
     halfw : int
-        Lambert half-width; side is ``1 + 2 * halfw`` (default ``250``).
+        Lambert half-width; side is ``1 + 2 * halfw`` (default ``500``).
     dmin : float
         Minimum interplanar spacing in nm (default ``0.05``).
     energy_binwidth_keV : float
@@ -167,11 +167,14 @@ def master_pattern(
         MC trajectories per bin when ``mc_auto_stop=False``.
     sigma_deg, omega_deg : float
         Specimen tilt and azimuth (degrees).
-    solver : {"smith_iterative", "lu_smith"}
-        Dynamical backend (default ``smith_iterative``).
+    solver : {"galerkin", "smith", "lu_smith"}
+        Dynamical backend (default ``galerkin``). The legacy name
+        ``"smith_iterative"`` is still accepted as a deprecated alias for
+        ``"smith"``.
     rank : int
-        Smith / Lyapunov rank (default 16; ``smith_iterative`` currently
-        supports only 16, ``lu_smith`` accepts higher).
+        Krylov / Lyapunov rank (default ``8`` for Galerkin; ``smith``
+        requires ``16``, ``lu_smith`` accepts higher). Galerkin uses a fixed
+        rank for every k-vector; there is no adaptive or per-k rank selection.
     exact_slow_cpu : bool
         Full-rank CPU Lyapunov instead of GPU Smith.
     verbosity : {0, 1, 2}

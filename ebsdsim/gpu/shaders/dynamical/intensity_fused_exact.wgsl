@@ -6,7 +6,7 @@
 // (i,j,site,rank). No dh matrix is materialized.
 //
 // Dispatch: (batch_count, 1, 1), @workgroup_size(256)
-// Limits: n <= 2048 (matches Smith iterative ceiling), rank <= 16, n_sites <= 16.
+// Limits: n <= 2048 (matches Smith ceiling), rank <= 16, n_sites <= 16.
 // Shared: 3*2048*i32 + 16*256*f32 = 40960 B (< 48 KiB).
 // Params packing: <4I4i4I4f
 

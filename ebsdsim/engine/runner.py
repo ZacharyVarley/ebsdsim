@@ -156,7 +156,7 @@ class RunOneVoltageDeps:
     working_chunk_size: int | None = None
     max_chunks: int | None = None
     # Dynamical-only accumulators (exclude prep/lookup/prescan) for throughput
-    # reporting symmetric with the Smith-iterative path.
+    # reporting symmetric with the Smith path.
     dyn_wall_s: float = 0.0
     k_solved: int = 0
     lookup_geometry: DiffLookupGeometry | None = None

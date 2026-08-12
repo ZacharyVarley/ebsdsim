@@ -12,6 +12,19 @@ from ebsdsim.gpu.pipelines import BufferResource, PipelineCache, resolve_storage
 
 
 @dataclass
+class ResourceBinding:
+    """Storage resource with an optional explicit WebGPU binding index.
+
+    When ``binding`` is ``None``, assignment is positional (``list index + 1``),
+    matching historical ``DispatchItem.resources`` behaviour. Set ``binding`` to
+    skip reserved slots (e.g. galerkin solve uses 14/15 while leaving 12/13 free).
+    """
+
+    resource: Any
+    binding: int | None = None
+
+
+@dataclass
 class DispatchItem:
     key: str
     code: str
@@ -21,6 +34,25 @@ class DispatchItem:
     label: str
     n_storage_bindings: int
     uniform_size: int = 16
+
+
+def _unwrap_resource(resource: Any) -> tuple[Any, int | None]:
+    if isinstance(resource, ResourceBinding):
+        return resource.resource, resource.binding
+    return resource, None
+
+
+def resource_binding_index(resource: Any, position: int) -> int:
+    """Resolve the WebGPU storage binding for ``resources[position]``."""
+    _res, explicit = _unwrap_resource(resource)
+    if explicit is not None:
+        return int(explicit)
+    return position + 1
+
+
+def binding_indices_for(resources: list) -> list[int]:
+    """Binding numbers for each entry in a resources list (sparse-aware)."""
+    return [resource_binding_index(r, i) for i, r in enumerate(resources)]
 
 
 def _resource_binding(resource: Any) -> dict[str, Any]:
@@ -86,7 +118,11 @@ class PersistentSubmitter:
         params_size: int,
         resources: list,
     ) -> Any:
-        token = (label, id(layout), id(params_buf), tuple(_resource_token(r) for r in resources))
+        tokens = tuple(
+            (_resource_token(_unwrap_resource(r)[0]), resource_binding_index(r, i))
+            for i, r in enumerate(resources)
+        )
+        token = (label, id(layout), id(params_buf), tokens)
         cached = self._bind_groups.get(token)
         if cached is not None:
             return cached
@@ -97,7 +133,13 @@ class PersistentSubmitter:
             {"binding": 0, "resource": {"buffer": params_buf, "size": params_size}}
         ]
         for i, resource in enumerate(resources):
-            entries.append({"binding": i + 1, "resource": _resource_binding(resource)})
+            raw, _explicit = _unwrap_resource(resource)
+            entries.append(
+                {
+                    "binding": resource_binding_index(resource, i),
+                    "resource": _resource_binding(raw),
+                }
+            )
         bg = self.device.create_bind_group(
             layout=layout, entries=entries, label=f"{label}:bg"
         )
@@ -116,13 +158,17 @@ class PersistentSubmitter:
                 pdata = bytes(pdata) + b"\x00" * (params_size - len(pdata))
             params_buf = self._params_buf(it.label, params_size)
             self.queue.write_buffer(params_buf, 0, pdata)
+            indices = binding_indices_for(it.resources)
             pipeline, layout = self.pipelines.get_pipeline(
                 it.key,
                 it.code,
                 n_storage_bindings=it.n_storage_bindings,
                 uniform_size=it.uniform_size,
                 storage_read_only=resolve_storage_read_only(
-                    it.code, it.n_storage_bindings, None
+                    it.code,
+                    it.n_storage_bindings,
+                    None,
+                    binding_indices=indices,
                 ),
             )
             bg = self._bind_group(

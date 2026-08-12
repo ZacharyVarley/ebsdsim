@@ -1,7 +1,9 @@
-"""GPU dynamical-theory kernels (LU–Smith and Smith iterative).
+"""GPU dynamical-theory kernels (LU–Smith, Smith, and Galerkin RKSM).
 
 :class:`EBSDDynamicalKernels` is the LU–Smith façade used by the engine.
-Smith iterative BiCGSTAB lives in :mod:`ebsdsim.gpu.dynamical.smith_iterative`.
+Smith BiCGSTAB lives in :mod:`ebsdsim.gpu.dynamical.smith`.
+Galerkin (rational Krylov / projected Lyapunov) lives in
+:mod:`ebsdsim.gpu.dynamical.galerkin`.
 """
 
 from __future__ import annotations

@@ -24,7 +24,7 @@ filesystem path:
    mp = es.master_pattern_from_cif(
        "GaN.cif",
        voltage_kv=20.0,
-       halfw=250,              # 501×501 Lambert raster
+       halfw=250,              # 501×501 raster; the default 500 gives 1001×1001
        dmin=0.05,              # nm, reflection cutoff
        energy_binwidth_keV=1.0,
    )

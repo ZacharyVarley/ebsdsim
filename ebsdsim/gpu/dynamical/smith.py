@@ -1,4 +1,4 @@
-"""Optimized Smith iterative dynamical loop — persistent buffers, one submit per chunk."""
+"""Optimized Smith dynamical loop — persistent buffers, one submit per chunk."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 from ebsdsim.gpu.batch import PersistentSubmitter
 from ebsdsim.gpu.buffers import StorageBuffer, c64_bytes, f32_bytes, u32_bytes
 from ebsdsim.gpu.device import sync_device
-from ebsdsim.gpu.dynamical.smith_iterative_dispatch import (
+from ebsdsim.gpu.dynamical.smith_dispatch import (
     MAX_WG_PER_DIM,
     RANK,
     TileDispatchCtx,
@@ -20,14 +20,14 @@ from ebsdsim.gpu.dynamical.smith_iterative_dispatch import (
     count_mode_flags,
     profile_stages,
 )
-from ebsdsim.gpu.dynamical.smith_iterative_prep import (
-    SmithIterativeCrystalPrep,
+from ebsdsim.gpu.dynamical.smith_prep import (
+    SmithCrystalPrep,
     VoltageBin,
     activate_voltage_bin,
 )
-from ebsdsim.gpu.dynamical.smith_iterative_shader import (
-    MAX_N_SMITH_ITERATIVE,
-    load_smith_iterative_shader,
+from ebsdsim.gpu.dynamical.smith_shader import (
+    MAX_N_SMITH,
+    load_smith_shader,
 )
 from ebsdsim.gpu.pipelines import load_wgsl
 from ebsdsim.lambert.kgrid import chunk_k_vectors
@@ -35,11 +35,11 @@ from ebsdsim.physics.prescan import relative_normalized_view_change
 
 # Re-export for engine / callers that import from this module.
 __all__ = [
-    "MAX_N_SMITH_ITERATIVE",
+    "MAX_N_SMITH",
     "TILE_VRAM_BUDGET_BYTES",
     "auto_tile_k",
     "auto_queue_depth",
-    "load_smith_iterative_shader",
+    "load_smith_shader",
     "run_bins_dynamical",
 ]
 
@@ -101,7 +101,7 @@ def auto_tile_k(
 ) -> int:
     """Largest k-tile whose workspace fits ``budget`` (min 256, capped).
 
-    Capped at ``MAX_WG_PER_DIM`` because the per-k kernels (smith_iterative/topk/slim/inten)
+    Capped at ``MAX_WG_PER_DIM`` because the per-k kernels (smith/topk/slim/inten)
     launch one workgroup per k. The score/gather kernels are grid-strided, so they
     do not constrain the tile.
 
@@ -190,13 +190,13 @@ def _destroy_ws(ws: SimpleNamespace) -> None:
 
 
 def run_bins_dynamical(
-    prep: SmithIterativeCrystalPrep,
+    prep: SmithCrystalPrep,
     bins: list[VoltageBin],
     *,
     chunk: int,
     code_topk: str,
     code_slim: str,
-    code_smith_iterative: str,
+    code_smith: str,
     code_inten: str,
     profile: bool = False,
     progress_every: int = 0,
@@ -300,16 +300,16 @@ def run_bins_dynamical(
         n_w = max(int(a["n_weak"]) for a in pre_activated)
         # Size-pass already paid activate; dyn loop reuses acts (bookkeep≈0).
         bin_prep_timings = [dict(a.get("timings", {})) for a in pre_activated]
-    if n > MAX_N_SMITH_ITERATIVE:
-        raise RuntimeError(f"n_strong={n} > smith_iterative MAX_N={MAX_N_SMITH_ITERATIVE}")
-    uses_unique_bits = "uniq_bits" in code_smith_iterative
-    uses_uniq_vals = "uniq_vals" in code_smith_iterative
-    uses_uniq_meta = "uniq_meta" in code_smith_iterative
-    uses_implicit_bicg = "hkl_hash" in code_smith_iterative and "bicgstab_solve" in code_smith_iterative
+    if n > MAX_N_SMITH:
+        raise RuntimeError(f"n_strong={n} > smith MAX_N={MAX_N_SMITH}")
+    uses_unique_bits = "uniq_bits" in code_smith
+    uses_uniq_vals = "uniq_vals" in code_smith
+    uses_uniq_meta = "uniq_meta" in code_smith
+    uses_implicit_bicg = "hkl_hash" in code_smith and "bicgstab_solve" in code_smith
     # Clamp tile: auto_tile_k ignores n_k; global uniq_vals/meta are O(chunk*16k).
     chunk = min(int(chunk), int(n_k), MAX_WG_PER_DIM)
     # vec2<f16> = 4 B/entry; vec2<f32> storage variant = 8 B/entry.
-    _uv_stride = 8 if "uniq_vals: array<vec2<f32>>" in code_smith_iterative else 4
+    _uv_stride = 8 if "uniq_vals: array<vec2<f32>>" in code_smith else 4
     if uses_uniq_vals or uses_uniq_meta:
         max_chunk_uniq = 1_800_000_000 // (16384 * _uv_stride)
         if chunk > max_chunk_uniq:
@@ -321,13 +321,13 @@ def run_bins_dynamical(
     stats = StorageBuffer(
         device, queue, label="hp:stats", data=np.zeros(chunk * 2, dtype=np.uint32), copy_src=True
     )
-    smith_iterative_scratch = None
-    smith_iterative_uniq_vals = None
-    smith_iterative_uniq_meta = None
+    smith_scratch = None
+    smith_uniq_vals = None
+    smith_uniq_meta = None
     # MAX_UWORDS = 2048 for global bitset/prefix (plen up to 65536).
     _max_uwords = 2048
     if uses_unique_bits:
-        smith_iterative_scratch = StorageBuffer(
+        smith_scratch = StorageBuffer(
             device,
             queue,
             label="hp:uniqueBitsetAtomic",
@@ -335,7 +335,7 @@ def run_bins_dynamical(
             copy_dst=True,
         )
     if uses_uniq_vals:
-        smith_iterative_uniq_vals = StorageBuffer(
+        smith_uniq_vals = StorageBuffer(
             device,
             queue,
             label="hp:uniqueVals",
@@ -343,7 +343,7 @@ def run_bins_dynamical(
             copy_dst=True,
         )
     if uses_uniq_meta:
-        smith_iterative_uniq_meta = StorageBuffer(
+        smith_uniq_meta = StorageBuffer(
             device,
             queue,
             label="hp:uniqueMeta",
@@ -409,8 +409,8 @@ def run_bins_dynamical(
         nonlocal ws, n, n_w
         if n_s <= n and n_wk <= n_w:
             return
-        if n_s > MAX_N_SMITH_ITERATIVE:
-            raise RuntimeError(f"n_strong={n_s} > smith_iterative MAX_N={MAX_N_SMITH_ITERATIVE}")
+        if n_s > MAX_N_SMITH:
+            raise RuntimeError(f"n_strong={n_s} > smith MAX_N={MAX_N_SMITH}")
         _destroy_ws(ws)
         n = max(n, n_s)
         n_w = max(n_w, n_wk)
@@ -501,7 +501,7 @@ def run_bins_dynamical(
                     return t0
 
                 t = time.perf_counter()
-                # Full pipeline in ONE queue.submit (score → topk → gather → slim → smith_iterative → inten).
+                # Full pipeline in ONE queue.submit (score → topk → gather → slim → smith → inten).
                 items = build_tile_dispatch(
                     TileDispatchCtx(
                         rows=rows,
@@ -514,7 +514,7 @@ def run_bins_dynamical(
                         code_gather=code_gather,
                         code_slim=code_slim,
                         code_gather_slim=code_gather_slim,
-                        code_smith_iterative=code_smith_iterative,
+                        code_smith=code_smith,
                         code_inten=code_inten,
                         use_gather_slim=use_gather_slim,
                         uses_implicit_bicg=uses_implicit_bicg,
@@ -538,9 +538,9 @@ def run_bins_dynamical(
                         bin_out=bin_out,
                         intensity_buf=inten_buf,
                         write_global=1,
-                        smith_iterative_scratch=smith_iterative_scratch,
-                        smith_iterative_uniq_vals=smith_iterative_uniq_vals,
-                        smith_iterative_uniq_meta=smith_iterative_uniq_meta,
+                        smith_scratch=smith_scratch,
+                        smith_uniq_vals=smith_uniq_vals,
+                        smith_uniq_meta=smith_uniq_meta,
                     )
                 )
 
@@ -703,19 +703,19 @@ def run_bins_dynamical(
         # reports no error, so a fully blank solve means nothing ever landed.
         if saw_weighted_bin and not saw_intensity:
             raise RuntimeError(
-                f"smith_iterative solved {bins_run} weighted bin(s) but every intensity is "
+                f"smith solved {bins_run} weighted bin(s) but every intensity is "
                 f"zero (k tile {chunk}, n_strong {n}). The GPU discarded the submits, which "
                 f"happens when a command buffer runs too long; retry with a smaller k tile."
             )
     finally:
         _destroy_ws(ws)
         stats.destroy()
-        if smith_iterative_scratch is not None:
-            smith_iterative_scratch.destroy()
-        if smith_iterative_uniq_vals is not None:
-            smith_iterative_uniq_vals.destroy()
-        if smith_iterative_uniq_meta is not None:
-            smith_iterative_uniq_meta.destroy()
+        if smith_scratch is not None:
+            smith_scratch.destroy()
+        if smith_uniq_vals is not None:
+            smith_uniq_vals.destroy()
+        if smith_uniq_meta is not None:
+            smith_uniq_meta.destroy()
         out_idx.destroy()
         kbuf.destroy()
         output.destroy()

@@ -32,7 +32,7 @@ import ebsdsim as es
 mp = es.master_pattern_from_cif(
     "GaN.cif",
     voltage_kv=20.0,
-    halfw=250,
+    halfw=250,  # 501×501 raster; the default 500 gives 1001×1001
     sigma_deg=70.0,
 )
 mp.save("GaN-master-pattern.npz")

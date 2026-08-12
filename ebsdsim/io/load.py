@@ -291,7 +291,7 @@ class LoadedMasterPattern:
 
     ``n_bins == 0`` (empty ``bin_fs``) means energy-integrated only: voltages
     and weights describe the energy model but no per-bin intensity slices were
-    stored. Current solvers (``lu_smith`` and Smith iterative) store one pattern
+    stored. Current solvers (``lu_smith`` and Smith) store one pattern
     per voltage bin; ``bin_voltages_kv.size`` must not be treated as ``n_bins``
     for older integrated-only files.
     """
@@ -526,6 +526,20 @@ def _deconsolidate_fundamental_sector(
     return integrated_fs, bin_fs
 
 
+def _normalize_solver_metadata(meta: dict[str, Any]) -> None:
+    """Rewrite legacy solver keys from older on-disk metadata in place.
+
+    Pre-rename files store ``solver="smith_iterative"`` and
+    ``smith_iterative_mode``; new files use ``"smith"`` / ``smith_mode``.
+    """
+    if meta.get("solver") == "smith_iterative":
+        meta["solver"] = "smith"
+    if "smith_iterative_mode" in meta:
+        if "smith_mode" not in meta:
+            meta["smith_mode"] = meta["smith_iterative_mode"]
+        del meta["smith_iterative_mode"]
+
+
 def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
     """Load an ebsdsim master-pattern ``.npz``.
 
@@ -552,6 +566,7 @@ def load_master_pattern(path: str | Path) -> LoadedMasterPattern:
     with np.load(Path(path), allow_pickle=False) as data:
         meta_bytes = bytes(np.asarray(data["meta_json"], dtype=np.uint8).tobytes())
         meta = json.loads(meta_bytes.decode("utf-8")) if meta_bytes else {}
+        _normalize_solver_metadata(meta)
         bin_voltages_kv = np.asarray(data["bin_voltages_kv"], dtype=np.float32)
         bin_weights = np.asarray(data["bin_weights"], dtype=np.float32)
         if "site_weights" in data:

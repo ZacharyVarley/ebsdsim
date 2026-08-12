@@ -17,7 +17,7 @@ def test_validate_verbosity_rejects_other():
         validate_verbosity(3)
 
 
-def _reporter(verbosity: int, *, solver: str = "smith_iterative") -> MasterPatternProgress:
+def _reporter(verbosity: int, *, solver: str = "smith") -> MasterPatternProgress:
     return MasterPatternProgress(
         verbosity=verbosity,
         source="Ni",
@@ -30,15 +30,24 @@ def _reporter(verbosity: int, *, solver: str = "smith_iterative") -> MasterPatte
     )
 
 
-def test_progress_banner_smith_iterative(capsys):
-    _reporter(1, solver="smith_iterative").run_banner(mc_backend="surrogate", n_bins=10, n_k=1681)
+def test_progress_banner_galerkin(capsys):
+    _reporter(1, solver="galerkin").run_banner(mc_backend="surrogate", n_bins=10, n_k=1681)
     out = capsys.readouterr().out
     assert "[ebsdsim]" in out
-    assert "Smith iterative" in out
+    assert "Galerkin rank 20" in out
     assert "1681 k-pts/bin" in out
 
 
 def test_progress_banner_smith(capsys):
+    _reporter(1, solver="smith").run_banner(mc_backend="surrogate", n_bins=10, n_k=1681)
+    out = capsys.readouterr().out
+    assert "[ebsdsim]" in out
+    assert "  Smith  chunk=" in out
+    assert "Smith rank" not in out
+    assert "1681 k-pts/bin" in out
+
+
+def test_progress_banner_lu_smith(capsys):
     _reporter(1, solver="lu_smith").run_banner(mc_backend="surrogate", n_bins=10, n_k=1681)
     out = capsys.readouterr().out
     assert "Smith rank 20" in out

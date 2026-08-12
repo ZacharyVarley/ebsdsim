@@ -5,7 +5,82 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.4] - 2026-08-12
+
+### Added
+
+- Galerkin dynamical solver (``solver="galerkin"``): rational Krylov subspace
+  method (RKSM, Druskin–Simoncini). The Cayley transform
+  ``T = (qI + A)(qI − A)^-1`` turns the Lyapunov equation into a Stein equation,
+  and BiCGSTAB column applications of ``T`` generate a rational Krylov subspace
+  with a single repeated pole at ``q`` — the same subspace the Smith path uses.
+  Where Smith combines those columns with truncated geometric-series
+  coefficients, Galerkin orthonormalizes them, forms the projected pencil
+  ``H = Qᴴ A Q`` and ``b = Qᴴ e₀``, solves the small ``m × m`` Lyapunov equation
+  on-device, and expands ``W = Q F``. Being optimal over the subspace, it
+  reaches better accuracy at rank 8 than Smith reaches at rank 16.
+  Shared Gauss–Jordan Lyapunov kernel for ranks ≤ 6, implicit CGNE for 7..16;
+  the selected kernel is reported as ``lyapunov_strategy`` in metadata.
+- Sparse storage bind-group support in ``PersistentSubmitter`` /
+  ``PipelineCache.dispatch_with_params`` via optional
+  ``ResourceBinding(resource, binding=…)``, so Galerkin can use bindings 14/15
+  while leaving 12/13 reserved. Contiguous positional assignment is unchanged
+  for existing callers.
+- ``infer_storage_read_only`` accepts optional ``binding_indices`` for sparse
+  layouts (contiguous ``1..n`` remains the default).
+- ``GALERKIN_OVERHEAD_BYTES`` / ``galerkin_bucket_params_for_n`` in the
+  shared-memory ladder, so the Galerkin epilogue's extra workgroup storage is
+  accounted for without shrinking the Smith path's buckets.
+- CI can be started manually (``workflow_dispatch``) with a ``jobs`` choice of
+  ``all`` / ``gpu-only`` / ``cpu-only``, so the macOS Metal GPU job can be run
+  against a branch without cutting a release.
+
+### Changed
+
+- Default dynamical solver is now Galerkin with ``rank=8``. Rank is fixed for
+  every k-vector; there is no adaptive or per-k rank selection. Rank 8 selects
+  the implicit CGNE Lyapunov kernel (the shared Gauss–Jordan kernel's Kronecker
+  workspace does not fit past rank 6). Measured against the exact CPU Lyapunov
+  reference, Galerkin at rank 8 improves on Smith at rank 16 on both median and
+  p95 relative error — on GaN, 0.99% / 2.76% versus 2.07% / 4.11% — while
+  running faster. Smith and LU–Smith remain available; the ``shader-f16``
+  fallback advice still points at ``lu_smith``.
+- Default ``halfw`` is now 500 (a 1001 × 1001 Lambert raster), up from 250.
+- Renamed the dynamical solver ``smith_iterative`` to ``smith`` (Smith iteration
+  is iterative by definition; the Galerkin solver shares the same Krylov
+  subspace). ``solver="smith_iterative"`` remains accepted as a deprecated
+  alias and emits ``DeprecationWarning``. Saved ``.npz`` metadata now writes
+  ``"solver": "smith"`` and ``smith_mode``; loaders normalize the legacy
+  ``smith_iterative`` / ``smith_iterative_mode`` keys so older files keep
+  working.
+- Projected Lyapunov kernels run at workgroup size 256 (was 64), matching the
+  solve kernel.
+- ``docs/parameters.rst`` now documents ``solver`` and lists the current
+  ``rank`` and ``halfw`` defaults (it previously claimed ``rank=20``).
+
+### Fixed
+
+- Non-LLL geometry fallback in the Smith and Galerkin solve kernels: when the
+  LLL-reduced Toeplitz pack is invalid, the geometry is rebuilt with ``U = I``
+  and ``mi = Blᵀ`` instead of rejecting the k-vector outright. Previously such
+  k-vectors were zeroed, leaving holes in the pattern — one k-vector in a
+  BCC iron pattern at ``halfw=50`` hits this path.
+- Projected Lyapunov Gauss–Jordan elimination no longer places a
+  ``workgroupBarrier()`` inside the victim-row loop, which cost on the order of
+  ``N²`` barriers (about 1300 at rank 6) while a single lane did the
+  right-hand-side updates. Elimination now strides all lanes over the
+  ``N × (N+1)`` augmented matrix for ``O(N)`` barriers, and the pivot search is
+  a parallel tree reduce. Pivoting, tolerances, and Cholesky floors are
+  unchanged.
+- Added ``workgroupUniformLoad`` fences on the geometry reject flag and on the
+  pack-mode and unique-Δ counters that gate barrier-containing control flow, so
+  strict WGSL implementations do not reject the barriers as non-uniform.
+
+### Removed
+
+- Optional third-party Hermite-normal-form fallback in the Smith Toeplitz packer
+  (env-gated; never a declared package dependency). The numpy column-HNF
+  implementation is the only path.
 
 ## [0.2.3] - 2026-08-05
 

@@ -4,7 +4,7 @@ The on-disk format stores the **fundamental-sector** intensities only (the
 minimal, symmetry-reduced representation) and is always compressed. Per-energy
 bin intensity slices are written when :attr:`MasterPattern.bin_patterns` is
 non-empty (``len(bin_patterns) == len(bin_voltages_kv)`` for both ``lu_smith``
-and Smith iterative). Smith iterative runs also keep a separate device-accumulated integrated
+and Smith). Smith runs also keep a separate device-accumulated integrated
 total; ``bin_voltages_kv`` / ``bin_weights`` remain the energy-model metadata.
 The embedded point-group operators and fundamental-sector normals make the
 file self-describing: it can be expanded back into full Lambert hemispheres
@@ -133,7 +133,7 @@ def save_master_pattern(mp: MasterPattern, path: str | Path) -> Path:
     :mod:`ebsdsim.io.load`.
 
     Per-bin intensity slices are written when ``mp.bin_patterns`` is non-empty
-    (same count contract as ``lu_smith`` / Smith iterative:
+    (same count contract as ``lu_smith`` / Smith:
     ``len(bin_patterns) == len(bin_voltages_kv)``). Empty ``bin_patterns`` with
     non-empty ``bin_voltages_kv`` remains a legal integrated-only edge case:
     voltages/weights are energy-model metadata, not a claim that one pattern

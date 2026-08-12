@@ -264,7 +264,7 @@ fn beam_hkl(n_base: u32, i: u32) -> vec3<f32> {
     );
 }
 
-fn build_smith_iterative_geometry(n: u32, n_base: u32, lid: u32) {
+fn build_smith_geometry(n: u32, n_base: u32, lid: u32) {
     // ===== Phase 1 (ALL THREADS): parallel reductions for centroid + covariance =====
     let inv_n = 1.0 / f32(n);
     var mx_loc = 0.0; var my_loc = 0.0; var mz_loc = 0.0;
@@ -459,6 +459,68 @@ fn build_smith_iterative_geometry(n: u32, n_base: u32, lid: u32) {
     } else {
         geom[29] = 0.0;
     }
+
+    // Non-LLL fallback: when LLL pack is invalid, retry with U = I
+    // (m = Bd = (Bl^{-1})^T, mi = Bl^T) — same basis phase 2 uses before LLL.
+    workgroupBarrier();
+    if (workgroupUniformLoad(&geom[29]) < 0.5) {
+        if (lid == 0u) {
+            let bli = inv3(
+                params.bl00, params.bl01, params.bl02,
+                params.bl10, params.bl11, params.bl12,
+                params.bl20, params.bl21, params.bl22,
+            );
+            let fm00 = bli[0]; let fm01 = bli[3]; let fm02 = bli[6];
+            let fm10 = bli[1]; let fm11 = bli[4]; let fm12 = bli[7];
+            let fm20 = bli[2]; let fm21 = bli[5]; let fm22 = bli[8];
+            geom[0] = fm00; geom[1] = fm01; geom[2] = fm02;
+            geom[3] = fm10; geom[4] = fm11; geom[5] = fm12;
+            geom[6] = fm20; geom[7] = fm21; geom[8] = fm22;
+            let fmi = inv3(fm00, fm01, fm02, fm10, fm11, fm12, fm20, fm21, fm22);
+            for (var t = 0u; t < 9u; t = t + 1u) { geom[9u + t] = fmi[t]; }
+        }
+        workgroupBarrier();
+
+        let h0f = beam_hkl(n_base, 0u);
+        let fm00 = geom[0]; let fm01 = geom[1]; let fm02 = geom[2];
+        let fm10 = geom[3]; let fm11 = geom[4]; let fm12 = geom[5];
+        let fm20 = geom[6]; let fm21 = geom[7]; let fm22 = geom[8];
+        var flo0_loc = 1e9; var flo1_loc = 1e9; var flo2_loc = 1e9;
+        var fhi0_loc = -1e9; var fhi1_loc = -1e9; var fhi2_loc = -1e9;
+        for (var i = lid; i < n; i = i + WG) {
+            let h = beam_hkl(n_base, i);
+            let dx = h.x - h0f.x; let dy = h.y - h0f.y; let dz = h.z - h0f.z;
+            let c0 = round(fm00*dx + fm01*dy + fm02*dz);
+            let c1 = round(fm10*dx + fm11*dy + fm12*dz);
+            let c2 = round(fm20*dx + fm21*dy + fm22*dz);
+            flo0_loc = min(flo0_loc, c0); flo1_loc = min(flo1_loc, c1); flo2_loc = min(flo2_loc, c2);
+            fhi0_loc = max(fhi0_loc, c0); fhi1_loc = max(fhi1_loc, c1); fhi2_loc = max(fhi2_loc, c2);
+        }
+        let flo0 = reduce_min_f(lid, flo0_loc);
+        let flo1 = reduce_min_f(lid, flo1_loc);
+        let flo2 = reduce_min_f(lid, flo2_loc);
+        let fhi0 = reduce_max_f(lid, fhi0_loc);
+        let fhi1 = reduce_max_f(lid, fhi1_loc);
+        let fhi2 = reduce_max_f(lid, fhi2_loc);
+
+        let fe0 = fhi0 - flo0 + 1.0;
+        let fe1 = fhi1 - flo1 + 1.0;
+        let fe2 = fhi2 - flo2 + 1.0;
+        let fd0 = 2.0 * fe0 - 1.0;
+        let fd1 = 2.0 * fe1 - 1.0;
+        let fd2 = 2.0 * fe2 - 1.0;
+        let fplen = fd0 * fd1 * fd2;
+        geom[18] = flo0; geom[19] = flo1; geom[20] = flo2;
+        geom[21] = fe0; geom[22] = fe1; geom[23] = fe2;
+        geom[24] = fd0; geom[25] = fd1; geom[26] = fd2;
+        geom[27] = (fe0 - 1.0) * (fd1 * fd2) + (fe1 - 1.0) * fd2 + (fe2 - 1.0);
+        geom[28] = fplen;
+        if (fplen > 0.0 && fplen < 1.0e7) {
+            geom[29] = 1.0;
+        } else {
+            geom[29] = 0.0;
+        }
+    }
 }
 
 fn zero_w_stack(lid: u32, wbase: u32, n_elems: u32) {
@@ -490,7 +552,7 @@ fn main(
     }
     workgroupBarrier();
 
-    build_smith_iterative_geometry(n, n_base, lid);
+    build_smith_geometry(n, n_base, lid);
     workgroupBarrier();
 
     if (lid == 0u) {
@@ -499,7 +561,11 @@ fn main(
     }
     workgroupBarrier();
 
-    if (geom[29] < 0.5) {
+    // geom[29] is the reject flag; load it uniformly so the early-return branch
+    // does not poison post-branch control flow (Chrome treats workgroup reads as
+    // possibly non-uniform, which would reject the downstream workgroupBarrier()s).
+    let reject_flag = workgroupUniformLoad(&geom[29]);
+    if (reject_flag < 0.5) {
         zero_w_stack(lid, wbase, n_w_elems);
         if (lid == 0u) { stats[batch] = 0xFFFFFFFFu; }
         return;
@@ -508,8 +574,8 @@ fn main(
     let lo0 = geom[18]; let lo1 = geom[19]; let lo2 = geom[20];
     let e0v = geom[21]; let e1v = geom[22]; let e2v = geom[23];
     let d0 = geom[24]; let d1 = geom[25]; let d2 = geom[26];
-    let off = i32(geom[27]);
-    let plen = u32(geom[28]);
+    let off = i32(workgroupUniformLoad(&geom[27]));
+    let plen = u32(workgroupUniformLoad(&geom[28]));
     let m00 = geom[0]; let m01 = geom[1]; let m02 = geom[2];
     let m10 = geom[3]; let m11 = geom[4]; let m12 = geom[5];
     let m20 = geom[6]; let m21 = geom[7]; let m22 = geom[8];
@@ -659,7 +725,7 @@ fn main(
         }
         workgroupBarrier();
 
-        if (g_mode == 1u) {
+        if (workgroupUniformLoad(&g_mode) == 1u) {
             // Mirror global meta into shared packing for unique_rank / load_u.
             let nwords_s = min(nwords, MAX_UWORDS_SHARED);
             for (var wi = lid; wi < nwords_s; wi = wi + WG) {
@@ -696,8 +762,8 @@ fn main(
             workgroupBarrier();
         }
 
-        if (g_mode == 3u) {
-            if (g_nu > MAX_NU_CAP) {
+        if (workgroupUniformLoad(&g_mode) == 3u) {
+            if (workgroupUniformLoad(&g_nu) > MAX_NU_CAP) {
                 if (lid == 0u) { g_mode = 2u; }
                 workgroupBarrier();
             } else if (USE_GLOBAL_UNIQ_VALS != 0u) {
@@ -739,7 +805,8 @@ fn main(
         if (lid == 0u) { g_mode = 2u; }
         workgroupBarrier();
     }
-    let mode = g_mode;
+    let mode = workgroupUniformLoad(&g_mode);
+    let g_nu_val = workgroupUniformLoad(&g_nu);
 
     let q = q_values[batch * 4u];
     let q1 = q_values[batch * 4u + 1u];
@@ -875,10 +942,10 @@ fn main(
                 var seg0 = 0u;
                 let vbase = batch * MAX_NU_CAP;
                 loop {
-                    if (seg0 >= g_nu) { break; }
+                    if (seg0 >= g_nu_val) { break; }
                     var seglen = UNIQUE_SEG_TILE;
                     if (seglen > MAX_PACK) { seglen = MAX_PACK; }
-                    if (seglen > (g_nu - seg0)) { seglen = g_nu - seg0; }
+                    if (seglen > (g_nu_val - seg0)) { seglen = g_nu_val - seg0; }
                     if (USE_GLOBAL_UNIQ_VALS != 0u) {
                         for (var i = lid; i < seglen; i = i + WG) {
                             let uv = uniq_vals[vbase + seg0 + i];
@@ -1101,10 +1168,10 @@ fn main(
                 var seg0 = 0u;
                 let vbase = batch * MAX_NU_CAP;
                 loop {
-                    if (seg0 >= g_nu) { break; }
+                    if (seg0 >= g_nu_val) { break; }
                     var seglen = UNIQUE_SEG_TILE;
                     if (seglen > MAX_PACK) { seglen = MAX_PACK; }
-                    if (seglen > (g_nu - seg0)) { seglen = g_nu - seg0; }
+                    if (seglen > (g_nu_val - seg0)) { seglen = g_nu_val - seg0; }
                     if (USE_GLOBAL_UNIQ_VALS != 0u) {
                         for (var i = lid; i < seglen; i = i + WG) {
                             let uv = uniq_vals[vbase + seg0 + i];
@@ -1313,7 +1380,7 @@ fn main(
             stats[batch] = st;
         }
         if (mode == 1u || mode == 3u) {
-            stats[params.batch_count + batch] = g_nu;
+            stats[params.batch_count + batch] = g_nu_val;
         } else {
             stats[params.batch_count + batch] = plen;
         }

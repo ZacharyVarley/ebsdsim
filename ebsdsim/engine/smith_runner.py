@@ -1,4 +1,4 @@
-"""Engine layer: Smith iterative voltage-integrated orchestration."""
+"""Engine layer: Smith voltage-integrated orchestration."""
 
 from __future__ import annotations
 
@@ -14,16 +14,16 @@ from ebsdsim.engine.integrate import (
     trim_multi_voltage_mc_by_coverage,
 )
 from ebsdsim.engine.progress import MasterPatternProgress
-from ebsdsim.gpu.dynamical.smith_iterative import (
+from ebsdsim.gpu.dynamical.smith import (
     auto_queue_depth,
     auto_tile_k,
-    load_smith_iterative_shader,
+    load_smith_shader,
     run_bins_dynamical,
 )
-from ebsdsim.gpu.dynamical.smith_iterative_prep import (
+from ebsdsim.gpu.dynamical.smith_prep import (
     VoltageBin,
     activate_voltage_bin,
-    open_smith_iterative_prep,
+    open_smith_prep,
 )
 from ebsdsim.gpu.pipelines import load_wgsl
 
@@ -42,7 +42,7 @@ def _voltage_bins_from_mc(mc: MultiVoltageMC) -> list[VoltageBin]:
     ]
 
 
-def run_smith_iterative_voltage_integrated(
+def run_smith_voltage_integrated(
     *,
     cell: SimCell,
     mc: MultiVoltageMC,
@@ -62,15 +62,15 @@ def run_smith_iterative_voltage_integrated(
     max_chunks: int | None = None,
     rank: int = 16,
 ) -> tuple[MasterPatternIntegratedResult, dict[str, Any]]:
-    """Run multi-bin Smith iterative integrate; return FS intensities + dyn stats."""
+    """Run multi-bin Smith integrate; return FS intensities + dyn stats."""
     mc_trim = trim_multi_voltage_mc_by_coverage(mc, marginal_coverage)
     bins = _voltage_bins_from_mc(mc_trim)
     if max_bins_run is not None:
         bins = bins[: max(0, int(max_bins_run))]
     if not bins:
-        raise RuntimeError("no active voltage bins for Smith iterative path")
+        raise RuntimeError("no active voltage bins for Smith path")
 
-    prep, bins = open_smith_iterative_prep(
+    prep, bins = open_smith_prep(
         "cell",
         halfw=halfw,
         voltage_kv=voltage_kv,
@@ -85,11 +85,11 @@ def run_smith_iterative_voltage_integrated(
     )
 
     code_topk = load_wgsl("dynamical/topk_radix_exact.wgsl")
-    code_slim = load_wgsl("dynamical/smith_iterative_slim_q.wgsl")
+    code_slim = load_wgsl("dynamical/smith_slim_q.wgsl")
     code_inten = load_wgsl("dynamical/intensity_fused_exact.wgsl")
     first = activate_voltage_bin(prep, bins[0])
     shared_budget = int(prep.device.limits["max-compute-workgroup-storage-size"])
-    code_smith_iterative, smith_iterative_mode = load_smith_iterative_shader(
+    code_smith, smith_mode = load_smith_shader(
         int(first["n_strong"]), shared_budget=shared_budget
     )
     tile = auto_tile_k(
@@ -105,7 +105,7 @@ def run_smith_iterative_voltage_integrated(
     queue_depth = max(queue_depth, auto_depth)
     if progress is not None and progress.enabled:
         print(
-            f"[ebsdsim]   Smith iterative BiCGSTAB  mode={smith_iterative_mode}  "
+            f"[ebsdsim]   Smith BiCGSTAB  mode={smith_mode}  "
             f"k_tile={tile}  qdepth={queue_depth}  bins={len(bins)}",
             flush=True,
         )
@@ -118,7 +118,7 @@ def run_smith_iterative_voltage_integrated(
             chunk=tile,
             code_topk=code_topk,
             code_slim=code_slim,
-            code_smith_iterative=code_smith_iterative,
+            code_smith=code_smith,
             code_inten=code_inten,
             first_act=first,
             queue_depth=queue_depth,
@@ -135,7 +135,7 @@ def run_smith_iterative_voltage_integrated(
     bin_stack = np.asarray(dyn["bin_intensities"], dtype=np.float32)
     if bin_stack.ndim != 3 or bin_stack.shape != (bins_run, n_k, n_sites):
         raise RuntimeError(
-            f"smith_iterative bin_intensities shape {bin_stack.shape} != "
+            f"smith bin_intensities shape {bin_stack.shape} != "
             f"({bins_run}, {n_k}, {n_sites})"
         )
     bin_patterns = list(np.ascontiguousarray(bin_stack.reshape(bins_run, -1)))
@@ -152,7 +152,7 @@ def run_smith_iterative_voltage_integrated(
         bin_indices=[b.bin_index for b in bins[:bins_run]],
     )
     meta = {
-        "smith_iterative_mode": smith_iterative_mode,
+        "smith_mode": smith_mode,
         "fail_k": int(dyn.get("fail_k", 0)),
         "dyn_wall_s": float(dyn.get("dyn_wall_s", 0.0)),
         "k_per_s": float(dyn.get("k_per_s", 0.0)),

@@ -18,7 +18,7 @@ from ebsdsim.gpu import device as gpu_device_mod
 from ebsdsim.gpu.buffers import StorageBuffer
 from ebsdsim.gpu.device import require_gpu
 from ebsdsim.gpu.dynamical import EBSDDynamicalKernels
-from ebsdsim.gpu.dynamical import smith_iterative_repack as zr
+from ebsdsim.gpu.dynamical import smith_repack as zr
 from ebsdsim.gpu.pipelines import PipelineCache, load_wgsl
 from ebsdsim.gpu.resident import ResidentTables, make_metric_buffer
 from ebsdsim.lambert.kgrid import build_pg_k_grid, transform_pg_k_grid_to_reciprocal
@@ -38,8 +38,8 @@ class VoltageBin:
 
 
 @dataclass
-class SmithIterativeCrystalPrep:
-    """Voltage-independent state for the smith_iterative hotpath."""
+class SmithCrystalPrep:
+    """Voltage-independent state for the smith hotpath."""
 
     label: str
     cell: object
@@ -119,7 +119,7 @@ def _transpose_sgh(
     return dst
 
 
-def open_smith_iterative_prep(
+def open_smith_prep(
     label: str,
     *,
     halfw: int,
@@ -132,14 +132,14 @@ def open_smith_iterative_prep(
     dbdiff_sg_cutoff: float = 1.0,
     cell: object | None = None,
     reuse_kernels: EBSDDynamicalKernels | None = None,
-) -> tuple[SmithIterativeCrystalPrep, list[VoltageBin]]:
-    """Open shared smith_iterative prep. ``bins`` is required (caller supplies energy model)."""
+) -> tuple[SmithCrystalPrep, list[VoltageBin]]:
+    """Open shared smith prep. ``bins`` is required (caller supplies energy model)."""
     import time
 
     timings: dict[str, float] = {}
     t0 = time.perf_counter()
     if cell is None:
-        raise ValueError("open_smith_iterative_prep requires cell= (SimCell)")
+        raise ValueError("open_smith_prep requires cell= (SimCell)")
     timings["cell"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
@@ -196,7 +196,7 @@ def open_smith_iterative_prep(
 
     _ = voltage_kv  # signature stability; bins already carry voltages
 
-    prep = SmithIterativeCrystalPrep(
+    prep = SmithCrystalPrep(
         label=label,
         cell=cell,
         lookup_geometry=geom,
@@ -224,7 +224,7 @@ def open_smith_iterative_prep(
     return prep, bins
 
 
-def activate_voltage_bin(prep: SmithIterativeCrystalPrep, bin: VoltageBin):
+def activate_voltage_bin(prep: SmithCrystalPrep, bin: VoltageBin):
     """Bind lookup/resident/kvecs/mu for one bin; prefetch the next lookup on CPU."""
     import time
 

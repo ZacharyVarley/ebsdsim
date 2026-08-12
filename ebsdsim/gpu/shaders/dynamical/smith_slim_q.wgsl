@@ -1,6 +1,6 @@
-// Smith iterative slim q/e0 assembly.
+// Smith slim q/e0 assembly.
 // Streams V_ij = pref * U(h_i-h_j) directly from diff_table and never writes
-// v_aa or dense Q+/Q-. Drop-Sigma only, matching the current smith_iterative E2E path.
+// v_aa or dense Q+/Q-. Drop-Sigma only, matching the current smith E2E path.
 //
 // Dispatch: (batch_count, 1, 1), @workgroup_size(256)
 // Params packing: <4I4i4f

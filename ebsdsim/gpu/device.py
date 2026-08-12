@@ -103,7 +103,7 @@ def get_device(
     """Return the shared GPU adapter/device/queue, creating it on first use.
 
     When ``required_features`` is set, the device is requested with those
-    WebGPU features (e.g. ``shader-f16`` for the Smith iterative path). A cached
+    WebGPU features (e.g. ``shader-f16`` for the Smith path). A cached
     device without the features is replaced if ``force`` or if the cache was
     created with a different feature set.
     """
@@ -132,7 +132,7 @@ def get_device(
         if missing:
             raise RuntimeError(
                 f"WebGPU adapter missing required features: {missing}. "
-                "The default Smith iterative solver needs shader-f16; "
+                "The default Galerkin solver needs shader-f16; "
                 "pass solver='lu_smith' to use the dense LU–Smith path."
             )
         device = adapter.request_device_sync(required_features=list(want))

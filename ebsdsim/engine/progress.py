@@ -24,7 +24,7 @@ class MasterPatternProgress:
     exact_slow_cpu: bool
     rank: int
     chunk_size: int
-    solver: str = "smith_iterative"
+    solver: str = "galerkin"
     _bin_t0: float = field(default=0.0, repr=False)
     _dyn_t0: float = field(default=0.0, repr=False)
     _chunk_t0: float = field(default=0.0, repr=False)
@@ -44,8 +44,10 @@ class MasterPatternProgress:
     def _solver_label(self) -> str:
         if self.exact_slow_cpu or self.solver == "exact_slow_cpu":
             return "exact CPU Lyapunov"
-        if self.solver == "smith_iterative":
-            return "Smith iterative"
+        if self.solver == "galerkin":
+            return f"Galerkin rank {self.rank}"
+        if self.solver == "smith":
+            return "Smith"
         return f"Smith rank {self.rank}"
 
     def run_banner(self, *, mc_backend: str, n_bins: int, n_k: int) -> None:

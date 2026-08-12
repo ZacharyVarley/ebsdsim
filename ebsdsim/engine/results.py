@@ -29,7 +29,7 @@ def validate_bin_contract(
     * ``len(bin_patterns) == 0``: integrated-only edge case.
       ``bin_voltages_kv`` / ``bin_weights`` may still describe the energy model.
     * ``len(bin_patterns) == len(bin_voltages_kv) == len(bin_weights)`` with
-      length ≥ 1: real per-bin intensity slices (``lu_smith`` and Smith iterative).
+      length ≥ 1: real per-bin intensity slices (``lu_smith`` and Smith).
 
     Any other combination raises ``ValueError`` so save/load cannot silently
     fabricate one intensity pattern per voltage.
@@ -75,7 +75,7 @@ class MasterPattern:
     :attr:`data` is the dense Lambert tensor ``(E, S, H, side, side)`` of raw
     intensities. :attr:`integrated` and :attr:`bin_patterns` store
     fundamental-sector values (flattened ``(n_k * n_sites,)``). Both
-    ``lu_smith`` and Smith iterative return ``len(bin_patterns) ==
+    ``lu_smith`` and Smith return ``len(bin_patterns) ==
     len(bin_voltages_kv)``; the integrated total is a separate accumulator.
     Empty ``bin_patterns`` is the integrated-only edge case; voltages and
     weights remain energy-model metadata. :attr:`kij` and :attr:`khat` give

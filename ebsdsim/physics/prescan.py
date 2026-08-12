@@ -50,7 +50,7 @@ def relative_normalized_view_change(
 ) -> float:
     """Relative change between min/max-normalized sum views before/after a bin.
 
-    Used by both the LU and smith_iterative integration paths to decide early stop on the
+    Used by both the LU and Smith integration paths to decide early stop on the
     voltage-integrated pattern (flattened fundamental-sector ``n_k`` view).
     """
     normalized_before = np.empty_like(current_sum_view)
