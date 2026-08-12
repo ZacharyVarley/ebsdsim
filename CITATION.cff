@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: If you use ebsdsim in your research, please cite it as below.
+type: software
+title: "ebsdsim: GPU-accelerated dynamical simulation of EBSD Kikuchi master patterns"
+abstract: >-
+  ebsdsim computes dynamical electron backscatter diffraction master
+  patterns from a crystal structure. Kikuchi master patterns are
+  simulated using multi-beam dynamical electron diffraction and
+  weighted by modeled electron depth and energy-loss distributions
+  for a given beam voltage and specimen tilt. The simulation is
+  GPU-accelerated and the package is written in Python.
+authors:
+  - family-names: Varley
+    given-names: Zachary
+    orcid: https://orcid.org/0009-0001-2451-1361
+  - family-names: Ånes
+    given-names: Håkon Wiik
+    affiliation: Xnovo Technology ApS
+    orcid: https://orcid.org/0000-0002-1213-2911
+version: v1
+date-released: "2026-08-12"
+doi: 10.5281/zenodo.21908721
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21908720
+    description: Concept DOI (always resolves to the latest version)
+license: MIT
+repository-code: https://github.com/ZacharyVarley/ebsdsim
+url: https://doi.org/10.5281/zenodo.21908721
+keywords:
+  - EBSD
+  - electron backscatter diffraction
+  - dynamical diffraction
+  - Bloch wave
+  - Bethe perturbation
+  - Kikuchi pattern
+  - master pattern
+  - Monte Carlo
+  - WebGPU
+  - crystallography
