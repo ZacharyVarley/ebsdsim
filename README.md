@@ -15,6 +15,8 @@ when you load them.
 
 User documentation is at [ebsdsim.readthedocs.io](https://ebsdsim.readthedocs.io/).
 
+You can also run ebsdsim in your browser without local installation: [ebsdsim.html](https://zacharyvarley.github.io/files/ebsdsim/ebsdsim.html).
+
 ## Installation
 
 ```bash
